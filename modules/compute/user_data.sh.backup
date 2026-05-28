@@ -6,7 +6,7 @@ exec > >(tee /var/log/user-data.log)
 exec 2>&1
 
 echo "=== User Data Script Starting ==="
-echo "Environment: $$${environment}"
+echo "Environment: ${environment}"
 echo "Timestamp: $(date)"
 
 # ============================================================
@@ -283,7 +283,7 @@ if [ -z "$DOMAIN" ]; then
   exit 1
 fi
 
-HNG_USERNAME="$$${HNG_USERNAME:-Your-Username}"
+HNG_USERNAME="${HNG_USERNAME:-Your-Username}"
 
 # Update Nginx config with SSL
 cat > /etc/nginx/nginx.conf << EOF

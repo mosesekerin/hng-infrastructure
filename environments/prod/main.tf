@@ -65,6 +65,7 @@ module "compute" {
   key_name              = var.key_name
   root_volume_size      = var.root_volume_size
   internet_gateway_id   = module.networking.internet_gateway_id
+  hng_username          = var.hng_username
 }
 
 # DNS (if you have a Route 53 hosted zone)
@@ -73,6 +74,7 @@ module "dns" {
   source = "../../modules/dns"
 
   domain_name        = var.domain_name
+  parent_domain      = var.parent_domain
   elastic_ip         = module.compute.public_ip
   create_www_record  = true
 }
