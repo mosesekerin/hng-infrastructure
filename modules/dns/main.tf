@@ -1,6 +1,6 @@
 # Data source: Get hosted zone
 data "aws_route53_zone" "main" {
-  name = var.domain_name
+  name = var.parent_domain
 }
 
 # A record pointing to Elastic IP

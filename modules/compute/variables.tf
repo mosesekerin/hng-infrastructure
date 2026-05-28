@@ -34,3 +34,9 @@ variable "internet_gateway_id" {
   description = "Internet Gateway ID (for EIP dependency)"
   type        = string
 }
+
+variable "hng_username" {
+  description = "HNG username to display on website"
+  type        = string
+  default     = "Your-HNG-Username"
+}

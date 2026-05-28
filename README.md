@@ -345,3 +345,22 @@ Timileyin (@mosesekerin)
 **Last Updated:** 2024-01-15  
 **Status:** Phase 1 Complete  
 **Next Phase:** Linux Hardening
+
+## SSL Certificate
+
+- **Domain:** infra.mosesekerin.name.ng (base domain only, no www)
+- **Issuer:** Let's Encrypt
+- **Validity:** 90 days
+- **Auto-renewal:** Enabled (via certbot timer)
+- **TLS Version:** 1.2, 1.3
+- **Ciphers:** Modern ECDHE suites
+
+### Certificate Renewal
+
+Certbot automatically renews certificates 30 days before expiry.
+
+Check renewal status:
+```bash
+sudo certbot certificates
+sudo certbot renew --dry-run
+```
