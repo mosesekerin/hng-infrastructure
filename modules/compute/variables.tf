@@ -38,5 +38,17 @@ variable "internet_gateway_id" {
 variable "hng_username" {
   description = "HNG username to display on website"
   type        = string
-  default     = "Your-HNG-Username"
+  default     = "Timileyin-Your-SRE-Guy"
+}
+
+variable "domain_name" {
+  description = "Domain name for SSL certificate"
+  type        = string
+  default     = "infra.mosesekerin.name.ng"
+}
+
+variable "certbot_email" {
+  description = "Email for Let's Encrypt"
+  type        = string
+  default     = "mosesekerin@gmail.com"
 }

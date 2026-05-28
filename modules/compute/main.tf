@@ -38,7 +38,9 @@ resource "aws_instance" "web" {
   # User data: Initial setup script
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
     environment = var.environment
-    hng_username = var.hng_username  # <-- ADD THIS
+    hng_username = var.hng_username
+    domain_name   = var.domain_name
+    certbot_email = var.certbot_email
   }))
 
   tags = {

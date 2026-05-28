@@ -6,13 +6,15 @@ exec > >(tee /var/log/user-data.log)
 exec 2>&1
 
 echo "=== User Data Script Starting ==="
-echo "Environment: $$${environment}"
+echo "Environment: ${environment}"
+echo "HNG Username: ${hng_username}"
 echo "Timestamp: $(date)"
 
 # ============================================================
 # SECTION 1: System Updates & Base Tools
 # ============================================================
 
+echo ""
 echo "=== Step 1: Updating system ==="
 apt-get update
 apt-get upgrade -y
@@ -34,6 +36,7 @@ apt-get install -y \
 # SECTION 2: Docker Installation
 # ============================================================
 
+echo ""
 echo "=== Step 3: Installing Docker ==="
 apt-get install -y docker.io docker-compose
 usermod -aG docker ubuntu
@@ -41,18 +44,19 @@ systemctl enable docker
 systemctl start docker
 
 # ============================================================
-# SECTION 3: Nginx Installation & Configuration
+# SECTION 3: Nginx Installation
 # ============================================================
 
+echo ""
 echo "=== Step 4: Installing Nginx ==="
 apt-get install -y nginx
 
-# Create Nginx directories
+# Create necessary directories
 mkdir -p /etc/nginx/conf.d
 mkdir -p /var/www/certbot
 
-# Create temporary HTTP-only Nginx config (before SSL)
-cat > /etc/nginx/nginx.conf << 'NGINX_HTTP_CONFIG'
+# Create initial HTTP-only config
+cat > /etc/nginx/nginx.conf << 'NGINX_HTTP_EOF'
 user www-data;
 worker_processes auto;
 worker_rlimit_nofile 65535;
@@ -64,11 +68,10 @@ events {
 }
 
 http {
-    # Logging
-    log_format structured '$remote_addr - $remote_user [$time_local] '
-                         '"$request" $status $body_bytes_sent '
-                         '"$http_referer" "$http_user_agent" '
-                         'request_time=$request_time';
+    log_format structured '$${remote_addr} - $${remote_user} [$${time_local}] '
+                         '"$${request}" $${status} $${body_bytes_sent} '
+                         '"$${http_referer}" "$${http_user_agent}" '
+                         'request_time=$${request_time}';
 
     access_log /var/log/nginx/access.log structured;
     error_log /var/log/nginx/error.log warn;
@@ -82,211 +85,143 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
 
-    # Gzip compression
     gzip on;
     gzip_vary on;
     gzip_min_length 1000;
     gzip_types text/plain text/css application/json text/javascript;
 
-    # Rate limiting zones
-    limit_req_zone $binary_remote_addr zone=general:10m rate=30r/s;
-    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
-
-    # HTTP Server Block (temporary)
     server {
         listen 80 default_server;
         listen [::]:80 default_server;
         server_name _;
 
-        # Certbot validation
         location /.well-known/acme-challenge/ {
             root /var/www/certbot;
         }
 
-        # Health check endpoint (before SSL ready)
         location = /health {
             access_log off;
             return 200 "OK\n";
             add_header Content-Type text/plain;
         }
 
-        # Redirect all other HTTP to HTTPS once ready
         location / {
             return 503;
-            add_header Retry-After "60" always;
         }
     }
 }
-NGINX_HTTP_CONFIG
+NGINX_HTTP_EOF
 
-# Test Nginx config
+# Test and start Nginx
 nginx -t
-
-# Start Nginx
 systemctl enable nginx
 systemctl start nginx
 
 echo "✅ Nginx installed and running (HTTP-only mode)"
 
 # ============================================================
-# SECTION 4: Certbot Installation (for SSL)
+# SECTION 4: Certbot Installation
 # ============================================================
 
+echo ""
 echo "=== Step 5: Installing Certbot ==="
 apt-get install -y certbot python3-certbot-nginx
-
-# Create renewal hook script that will be run after cert renewal
-cat > /etc/letsencrypt/renewal-hooks/post/nginx-reload.sh << 'RENEWAL_HOOK'
-#!/bin/bash
-systemctl reload nginx
-RENEWAL_HOOK
-
-chmod +x /etc/letsencrypt/renewal-hooks/post/nginx-reload.sh
 
 echo "✅ Certbot installed"
 
 # ============================================================
-# SECTION 5: Security Hardening
+# SECTION 5: Security & System Configuration
 # ============================================================
 
+echo ""
 echo "=== Step 6: Configuring UFW firewall ==="
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow 22/tcp    # SSH
-ufw allow 80/tcp    # HTTP
-ufw allow 443/tcp   # HTTPS
-ufw allow 9090/tcp  # Prometheus
-ufw allow 3000/tcp  # Grafana
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 9090/tcp
+ufw allow 3000/tcp
 ufw --force enable
 
-# ============================================================
-# SECTION 6: SSH Hardening
-# ============================================================
-
+echo ""
 echo "=== Step 7: Hardening SSH ==="
 sed -i 's/^#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 sed -i 's/^#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 systemctl reload sshd
 
-# ============================================================
-# SECTION 7: Automatic Security Updates
-# ============================================================
-
+echo ""
 echo "=== Step 8: Enabling automatic security updates ==="
 apt-get install -y unattended-upgrades
 systemctl enable unattended-upgrades
 systemctl start unattended-upgrades
 
 # ============================================================
-# SECTION 8: Create Application Directories
+# SECTION 6: Create Application Directories
 # ============================================================
 
+echo ""
 echo "=== Step 9: Creating application directories ==="
-mkdir -p /opt/hng
-mkdir -p /opt/hng/nginx
-mkdir -p /opt/hng/prometheus
-mkdir -p /opt/hng/grafana
-mkdir -p /opt/hng/loki
-
+mkdir -p /opt/hng/{nginx,prometheus,grafana,loki}
 chmod 755 /opt/hng
 
 # ============================================================
-# SECTION 9: Create Systemd Service Templates
+# SECTION 7: Create Systemd Service Overrides
 # ============================================================
 
-echo "=== Step 10: Creating systemd service templates ==="
+echo ""
+echo "=== Step 10: Creating systemd service overrides ==="
+mkdir -p /etc/systemd/system/nginx.service.d
 
-# Enhanced Nginx service with auto-restart
-cat > /etc/systemd/system/nginx.service.d/override.conf << 'NGINX_SERVICE'
+cat > /etc/systemd/system/nginx.service.d/override.conf << 'SYSTEMD_EOF'
 [Service]
 Restart=on-failure
 RestartSec=5s
 StartLimitInterval=60s
 StartLimitBurst=3
-NGINX_SERVICE
+SYSTEMD_EOF
 
-# Prometheus service template (for Phase 4)
-cat > /etc/systemd/system/prometheus.service << 'PROMETHEUS_SERVICE'
-[Unit]
-Description=Prometheus Monitoring
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=prometheus
-Group=prometheus
-ExecStart=/usr/local/bin/prometheus \
-  --config.file=/etc/prometheus/prometheus.yml \
-  --storage.tsdb.path=/var/lib/prometheus
-Restart=on-failure
-RestartSec=5s
-SyslogIdentifier=prometheus
-
-[Install]
-WantedBy=multi-user.target
-PROMETHEUS_SERVICE
-
-# Reload systemd
 systemctl daemon-reload
 
 # ============================================================
-# SECTION 10: Create SSL Certificate Script
+# SECTION 8: SSL Certificate Automation
 # ============================================================
 
-echo "=== Step 11: Creating SSL certificate helper script ==="
+echo ""
+echo "=== Step 11: Automating SSL certificate setup ==="
 
-# Create script that will be called to obtain SSL cert
-cat > /usr/local/bin/setup-ssl.sh << 'SSL_SETUP'
-#!/bin/bash
-set -e
+# Store domain and email for later use
+DOMAIN_NAME="${domain_name}"
+CERTBOT_EMAIL="${certbot_email}"
+HNG_USERNAME="${hng_username}"
 
-DOMAIN=$1
-EMAIL=$2
-
-if [ -z "$DOMAIN" ] || [ -z "$EMAIL" ]; then
-  echo "Usage: setup-ssl.sh <domain> <email>"
-  exit 1
-fi
-
-echo "Obtaining SSL certificate for $DOMAIN..."
-
-# Obtain certificate
-certbot certonly --nginx \
-  --non-interactive \
-  --agree-tos \
-  --email "$EMAIL" \
-  -d "$DOMAIN" \
-  -d "www.$DOMAIN"
-
-echo "Certificate obtained successfully!"
-echo "Certificate path: /etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-SSL_SETUP
-
-chmod +x /usr/local/bin/setup-ssl.sh
-
-# ============================================================
-# SECTION 11: Create Nginx Configuration Update Script
-# ============================================================
-
-echo "=== Step 12: Creating Nginx config update script ==="
-
-cat > /usr/local/bin/update-nginx-ssl.sh << 'NGINX_UPDATE'
-#!/bin/bash
-set -e
-
-DOMAIN=$1
-
-if [ -z "$DOMAIN" ]; then
-  echo "Usage: update-nginx-ssl.sh <domain>"
-  exit 1
-fi
-
-HNG_USERNAME="$$${HNG_USERNAME:-Your-Username}"
-
-# Update Nginx config with SSL
-cat > /etc/nginx/nginx.conf << EOF
+# Only attempt certificate if domain is provided
+if [ -n "$$DOMAIN_NAME" ] && [ -n "$$CERTBOT_EMAIL" ]; then
+    echo "Attempting to obtain SSL certificate for $$DOMAIN_NAME..."
+    
+    # Wait for DNS to propagate (give it 30 seconds)
+    sleep 30
+    
+    # Attempt to get certificate (don't fail if it doesn't work on first try)
+    if sudo certbot certonly --standalone \
+        --non-interactive \
+        --agree-tos \
+        --email "$$CERTBOT_EMAIL" \
+        -d "$$DOMAIN_NAME" 2>/dev/null; then
+        
+        echo "✅ SSL certificate obtained successfully"
+        CERT_SUCCESS=true
+    else
+        echo "⚠️ SSL certificate not obtained yet (will need manual setup)"
+        CERT_SUCCESS=false
+    fi
+    
+    # If certificate obtained, configure Nginx with SSL
+    if [ "$$CERT_SUCCESS" = true ]; then
+        echo "Configuring Nginx with SSL..."
+        
+        cat > /etc/nginx/nginx.conf << 'NGINX_SSL_EOF'
 user www-data;
 worker_processes auto;
 worker_rlimit_nofile 65535;
@@ -298,10 +233,10 @@ events {
 }
 
 http {
-    log_format structured '\$remote_addr - \$remote_user [\$time_local] '
-                         '"\$request" \$status \$body_bytes_sent '
-                         '"\$http_referer" "\$http_user_agent" '
-                         'request_time=\$request_time upstreamtime=\$upstream_response_time';
+    log_format structured '$${remote_addr} - $${remote_user} [$${time_local}] '
+                         '"$${request}" $${status} $${body_bytes_sent} '
+                         '"$${http_referer}" "$${http_user_agent}" '
+                         'request_time=$${request_time} upstreamtime=$${upstream_response_time}';
 
     access_log /var/log/nginx/access.log structured;
     error_log /var/log/nginx/error.log warn;
@@ -320,32 +255,30 @@ http {
     gzip_min_length 1000;
     gzip_types text/plain text/css application/json text/javascript;
 
-    limit_req_zone \$binary_remote_addr zone=general:10m rate=30r/s;
-    limit_req_zone \$binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req_zone $${binary_remote_addr} zone=general:10m rate=30r/s;
+    limit_req_zone $${binary_remote_addr} zone=api:10m rate=10r/s;
 
-    # HTTP to HTTPS redirect
     server {
         listen 80;
         listen [::]:80;
-        server_name $DOMAIN www.$DOMAIN;
+        server_name $$DOMAIN_NAME;
 
         location /.well-known/acme-challenge/ {
             root /var/www/certbot;
         }
 
         location / {
-            return 301 https://\$host\$request_uri;
+            return 301 https://$${host}$${request_uri};
         }
     }
 
-    # HTTPS server
     server {
         listen 443 ssl http2;
         listen [::]:443 ssl http2;
-        server_name $DOMAIN www.$DOMAIN;
+        server_name $$DOMAIN_NAME;
 
-        ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+        ssl_certificate /etc/letsencrypt/live/$$DOMAIN_NAME/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/$$DOMAIN_NAME/privkey.pem;
 
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256';
@@ -363,7 +296,7 @@ http {
         location = / {
             limit_req zone=general burst=20 nodelay;
             default_type text/html;
-            return 200 '<h1>$HNG_USERNAME</h1>';
+            return 200 '<h1>$$HNG_USERNAME</h1>';
             access_log /var/log/nginx/root.log structured;
         }
 
@@ -373,7 +306,7 @@ http {
             return 200 '{
               "message": "HNGI14 Stage 1",
               "track": "DevOps",
-              "username": "$HNG_USERNAME"
+              "username": "$$HNG_USERNAME"
             }';
             access_log /var/log/nginx/api.log structured;
         }
@@ -395,36 +328,31 @@ http {
         }
     }
 }
-EOF
+NGINX_SSL_EOF
 
-# Verify config
-nginx -t
-
-# Reload Nginx
-systemctl reload nginx
-
-echo "✅ Nginx updated with SSL configuration"
-NGINX_UPDATE
-
-chmod +x /usr/local/bin/update-nginx-ssl.sh
+        nginx -t
+        systemctl reload nginx
+        echo "✅ Nginx configured with SSL"
+    else
+        echo "⚠️ SSL not configured yet - will need manual setup"
+        echo "Once SSL obtained, update Nginx config manually"
+    fi
+else
+    echo "⚠️ Domain or email not provided - skipping SSL setup"
+    echo "Manual SSL setup required"
+fi
 
 # ============================================================
-# SECTION 12: Final Status
+# SECTION 9: Status Report
 # ============================================================
 
 echo ""
 echo "=== User Data Script Complete ==="
 echo "Completed at: $(date)"
 echo ""
-echo "Services Status:"
-systemctl status nginx --no-pager | grep -E "Active|Loaded"
-systemctl status docker --no-pager | grep -E "Active|Loaded"
-systemctl status ssh --no-pager | grep -E "Active|Loaded"
+echo "Service Status:"
+systemctl status nginx --no-pager 2>&1 | grep -E "Active|Loaded" || true
+systemctl status docker --no-pager 2>&1 | grep -E "Active|Loaded" || true
+systemctl status ssh --no-pager 2>&1 | grep -E "Active|Loaded" || true
 echo ""
 echo "✅ System initialization complete!"
-echo ""
-echo "Next steps:"
-echo "1. SSH into instance"
-echo "2. Run: setup-ssl.sh yourdomain.com your@email.com"
-echo "3. Run: update-nginx-ssl.sh yourdomain.com"
-echo "4. Verify HTTPS works"
