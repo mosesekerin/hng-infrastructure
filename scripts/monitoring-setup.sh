@@ -209,10 +209,14 @@ echo "✅ Node Exporter installed and running (port 9100)"
 echo ""
 echo "=== Step 3: Installing Grafana ==="
 
-# Add repository
-apt-get install -y software-properties-common
-add-apt-repository -y "deb https://packages.grafana.com/oss/deb stable main"
-wget -q -O - https://packages.grafana.com/gpg.key | apt-key add -
+# Add repository with proper GPG key handling
+apt-get install -y software-properties-common gpg
+
+# Download GPG key to proper location
+wget -q -O /usr/share/keyrings/grafana.gpg https://packages.grafana.com/gpg.key
+
+# Add repository with key path
+echo "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list
 
 # Install
 apt-get update
