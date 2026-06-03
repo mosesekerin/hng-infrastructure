@@ -32,3 +32,18 @@ output "domain_name" {
   value       = var.enable_dns ? var.domain_name : "Not configured"
   description = "Domain name"
 }
+
+output "prometheus_url" {
+  value       = "http://${module.compute.public_ip}:9090"
+  description = "Prometheus URL"
+}
+
+output "grafana_url" {
+  value       = "http://${module.compute.public_ip}:3000"
+  description = "Grafana URL (default credentials: admin/admin)"
+}
+
+output "node_exporter_url" {
+  value       = "http://${module.compute.public_ip}:9100/metrics"
+  description = "Node Exporter metrics URL"
+}

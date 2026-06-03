@@ -78,3 +78,12 @@ module "dns" {
   elastic_ip         = module.compute.public_ip
   create_www_record  = true
 }
+
+# Monitoring Stack (Phase 4)
+module "monitoring" {
+  source = "../../modules/monitoring"
+
+  domain_name      = var.domain_name
+  instance_public_ip = module.compute.public_ip
+  instance_id      = module.compute.instance_id
+}
