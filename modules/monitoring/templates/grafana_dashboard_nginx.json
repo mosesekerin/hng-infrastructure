@@ -1,0 +1,55 @@
+{
+  "dashboard": {
+    "title": "Nginx Metrics",
+    "tags": ["nginx", "web"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Active Connections",
+        "targets": [
+          {
+            "expr": "node_network_tcp_established",
+            "refId": "A",
+            "legendFormat": "{{ instance }}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph"
+      },
+      {
+        "title": "Network Receive",
+        "targets": [
+          {
+            "expr": "rate(node_network_receive_bytes_total{device=\"eth0\"}[5m])",
+            "refId": "A",
+            "legendFormat": "{{ instance }}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Bps"
+          }
+        }
+      },
+      {
+        "title": "Network Transmit",
+        "targets": [
+          {
+            "expr": "rate(node_network_transmit_bytes_total{device=\"eth0\"}[5m])",
+            "refId": "A",
+            "legendFormat": "{{ instance }}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "type": "graph",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Bps"
+          }
+        }
+      }
+    ]
+  }
+}

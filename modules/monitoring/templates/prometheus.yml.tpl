@@ -1,0 +1,37 @@
+# Prometheus Configuration
+global:
+  scrape_interval: 15s        # Scrape every 15 seconds
+  evaluation_interval: 15s    # Evaluate alerts every 15 seconds
+  external_labels:
+    monitor: 'hng-infrastructure'
+    environment: 'prod'
+
+# Alert manager configuration (for future use)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load alert rules
+rule_files:
+  - '/etc/prometheus/alert_rules.yml'
+
+scrape_configs:
+  # Node Exporter - System metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: '${domain_name}'
+
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Nginx metrics (via nginx-prometheus-exporter - optional)
+  # - job_name: 'nginx'
+  #   static_configs:
+  #     - targets: ['localhost:9113']

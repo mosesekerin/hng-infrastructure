@@ -1,0 +1,84 @@
+groups:
+  - name: system_alerts
+    interval: 15s
+    rules:
+      # High CPU alert
+      - alert: HighCPU
+        expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 5m
+        annotations:
+          summary: "High CPU on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | humanize }}% (threshold: 80%)"
+          severity: "warning"
+
+      # Very high CPU alert
+      - alert: CriticalCPU
+        expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 95
+        for: 2m
+        annotations:
+          summary: "Critical CPU on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | humanize }}% (threshold: 95%)"
+          severity: "critical"
+
+      # Low memory alert
+      - alert: LowMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 20
+        for: 5m
+        annotations:
+          summary: "Low memory on {{ $labels.instance }}"
+          description: "Available memory is {{ $value | humanize }}% (threshold: 20%)"
+          severity: "warning"
+
+      # Critical low memory
+      - alert: CriticalMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 2m
+        annotations:
+          summary: "Critical memory on {{ $labels.instance }}"
+          description: "Available memory is {{ $value | humanize }}% (threshold: 10%)"
+          severity: "critical"
+
+      # Disk space alert
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{fstype=~"ext4|xfs"} / node_filesystem_size_bytes{fstype=~"ext4|xfs"}) * 100 < 15
+        for: 5m
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Available disk space is {{ $value | humanize }}% (threshold: 15%)"
+          severity: "warning"
+
+      # Critical disk space
+      - alert: CriticalDiskSpace
+        expr: (node_filesystem_avail_bytes{fstype=~"ext4|xfs"} / node_filesystem_size_bytes{fstype=~"ext4|xfs"}) * 100 < 5
+        for: 2m
+        annotations:
+          summary: "Critical disk space on {{ $labels.instance }}"
+          description: "Available disk space is {{ $value | humanize }}% (threshold: 5%)"
+          severity: "critical"
+
+      # High system load
+      - alert: HighLoadAverage
+        expr: node_load15 > 4
+        for: 5m
+        annotations:
+          summary: "High system load on {{ $labels.instance }}"
+          description: "15-minute load average is {{ $value | humanize }} (threshold: 4)"
+          severity: "warning"
+
+      # Network interfaces down
+      - alert: NetworkInterfaceDown
+        expr: node_network_up{device!~"lo|docker.*"} == 0
+        for: 2m
+        annotations:
+          summary: "Network interface {{ $labels.device }} down on {{ $labels.instance }}"
+          description: "Interface has been down for more than 2 minutes"
+          severity: "critical"
+
+      # High network traffic
+      - alert: HighNetworkTraffic
+        expr: rate(node_network_receive_bytes_total[5m]) > 100000000  # > 100 Mbps
+        for: 5m
+        annotations:
+          summary: "High network traffic on {{ $labels.instance }}"
+          description: "Receive traffic is {{ $value | humanize }} bytes/sec"
+          severity: "warning"

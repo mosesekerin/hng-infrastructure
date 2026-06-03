@@ -34,7 +34,7 @@ apt-get install -y \
 # SECTION 2: Docker Installation
 # ============================================================
 
-echo "=== Step 3: Installing Docker ==="
+echo "=== Step 2: Installing Docker ==="
 apt-get install -y docker.io docker-compose
 usermod -aG docker ubuntu
 systemctl enable docker
@@ -44,7 +44,7 @@ systemctl start docker
 # SECTION 3: Nginx Installation & Configuration
 # ============================================================
 
-echo "=== Step 4: Installing Nginx ==="
+echo "=== Step 3: Installing Nginx ==="
 apt-get install -y nginx
 
 # Create Nginx directories
@@ -132,7 +132,7 @@ echo "✅ Nginx installed and running (HTTP-only mode)"
 # SECTION 4: Certbot Installation (for SSL)
 # ============================================================
 
-echo "=== Step 5: Installing Certbot ==="
+echo "=== Step 4: Installing Certbot ==="
 apt-get install -y certbot python3-certbot-nginx
 
 # Create renewal hook script that will be run after cert renewal
@@ -149,7 +149,7 @@ echo "✅ Certbot installed"
 # SECTION 5: Security Hardening
 # ============================================================
 
-echo "=== Step 6: Configuring UFW firewall ==="
+echo "=== Step 5: Configuring UFW firewall ==="
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp    # SSH
@@ -163,7 +163,7 @@ ufw --force enable
 # SECTION 6: SSH Hardening
 # ============================================================
 
-echo "=== Step 7: Hardening SSH ==="
+echo "=== Step 6: Hardening SSH ==="
 sed -i 's/^#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 sed -i 's/^#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
@@ -173,7 +173,7 @@ systemctl reload sshd
 # SECTION 7: Automatic Security Updates
 # ============================================================
 
-echo "=== Step 8: Enabling automatic security updates ==="
+echo "=== Step 7: Enabling automatic security updates ==="
 apt-get install -y unattended-upgrades
 systemctl enable unattended-upgrades
 systemctl start unattended-upgrades
@@ -182,7 +182,7 @@ systemctl start unattended-upgrades
 # SECTION 8: Create Application Directories
 # ============================================================
 
-echo "=== Step 9: Creating application directories ==="
+echo "=== Step 8: Creating application directories ==="
 mkdir -p /opt/hng
 mkdir -p /opt/hng/nginx
 mkdir -p /opt/hng/prometheus
@@ -195,7 +195,7 @@ chmod 755 /opt/hng
 # SECTION 9: Create Systemd Service Templates
 # ============================================================
 
-echo "=== Step 10: Creating systemd service templates ==="
+echo "=== Step 9: Creating systemd service templates ==="
 
 # Enhanced Nginx service with auto-restart
 cat > /etc/systemd/system/nginx.service.d/override.conf << 'NGINX_SERVICE'
@@ -206,28 +206,6 @@ StartLimitInterval=60s
 StartLimitBurst=3
 NGINX_SERVICE
 
-# Prometheus service template (for Phase 4)
-cat > /etc/systemd/system/prometheus.service << 'PROMETHEUS_SERVICE'
-[Unit]
-Description=Prometheus Monitoring
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=prometheus
-Group=prometheus
-ExecStart=/usr/local/bin/prometheus \
-  --config.file=/etc/prometheus/prometheus.yml \
-  --storage.tsdb.path=/var/lib/prometheus
-Restart=on-failure
-RestartSec=5s
-SyslogIdentifier=prometheus
-
-[Install]
-WantedBy=multi-user.target
-PROMETHEUS_SERVICE
-
 # Reload systemd
 systemctl daemon-reload
 
@@ -235,7 +213,7 @@ systemctl daemon-reload
 # SECTION 10: Create SSL Certificate Script
 # ============================================================
 
-echo "=== Step 11: Creating SSL certificate helper script ==="
+echo "=== Step 10: Creating SSL certificate helper script ==="
 
 # Create script that will be called to obtain SSL cert
 cat > /usr/local/bin/setup-ssl.sh << 'SSL_SETUP'
@@ -270,7 +248,7 @@ chmod +x /usr/local/bin/setup-ssl.sh
 # SECTION 11: Create Nginx Configuration Update Script
 # ============================================================
 
-echo "=== Step 12: Creating Nginx config update script ==="
+echo "=== Step 11: Creating Nginx config update script ==="
 
 cat > /usr/local/bin/update-nginx-ssl.sh << 'NGINX_UPDATE'
 #!/bin/bash
@@ -409,7 +387,30 @@ NGINX_UPDATE
 chmod +x /usr/local/bin/update-nginx-ssl.sh
 
 # ============================================================
-# SECTION 12: Final Status
+# SECTION 12: DOWNLOAD AND EXECUTE MONITORING SETUP
+# ============================================================
+
+echo ""
+echo "=== Step 12: Setting up monitoring stack ==="
+
+# Download monitoring setup script from GitHub
+GITHUB_RAW="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/main/scripts/monitoring-setup.sh"
+
+curl -fsSL "$GITHUB_RAW" -o /tmp/monitoring-setup.sh
+chmod +x /tmp/monitoring-setup.sh
+
+# Execute with background job (don't block user_data)
+if [ -f /tmp/monitoring-setup.sh ]; then
+  /tmp/monitoring-setup.sh >> /var/log/monitoring-setup.log 2>&1 &
+  echo "✅ Monitoring stack setup started (running in background)"
+  echo "   Check progress: tail -f /var/log/monitoring-setup.log"
+else
+  echo "❌ Failed to download monitoring setup script"
+  echo "   URL: $GITHUB_RAW"
+fi
+
+# ============================================================
+# SECTION 13: Final Status
 # ============================================================
 
 echo ""
