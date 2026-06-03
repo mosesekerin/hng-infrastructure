@@ -203,26 +203,45 @@ systemctl start node_exporter
 echo "✅ Node Exporter installed and running (port 9100)"
 
 # ============================================================
-# SECTION 3: GRAFANA INSTALLATION
+# SECTION 3: GRAFANA INSTALLATION (Binary Method)
 # ============================================================
 
 echo ""
-echo "=== Step 3: Installing Grafana ==="
+echo "=== Step 3: Installing Grafana (Binary) ==="
 
-# Add repository with proper GPG key handling
-apt-get install -y software-properties-common gpg
+# Download Grafana binary
+cd /tmp
+wget https://dl.grafana.com/oss/release/grafana-10.2.0.linux-amd64.tar.gz
+tar -xzf grafana-10.2.0.linux-amd64.tar.gz
 
-# Download GPG key to proper location
-wget -q -O /usr/share/keyrings/grafana.gpg https://packages.grafana.com/gpg.key
+# Create grafana user
+useradd --no-create-home --shell /bin/false grafana 2>/dev/null || true
 
-# Add repository with key path
-echo "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list
+# Move to /opt
+mv grafana-10.2.0 /opt/grafana
+chown -R grafana:grafana /opt/grafana
 
-# Install
-apt-get update
-apt-get install -y grafana-server
+# Create systemd service
+cat > /etc/systemd/system/grafana-server.service << 'GRAFANA_SERVICE'
+[Unit]
+Description=Grafana
+After=network-online.target
+Wants=network-online.target
 
-# Enable and start
+[Service]
+User=grafana
+Group=grafana
+Type=simple
+ExecStart=/opt/grafana/bin/grafana-server --config=/opt/grafana/conf/defaults.ini --homepath=/opt/grafana
+
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+GRAFANA_SERVICE
+
+# Start Grafana
 systemctl daemon-reload
 systemctl enable grafana-server
 systemctl start grafana-server
