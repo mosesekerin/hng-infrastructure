@@ -203,11 +203,11 @@ systemctl start node_exporter
 echo "✅ Node Exporter installed and running (port 9100)"
 
 # ============================================================
-# SECTION 3: GRAFANA INSTALLATION (Binary Method)
+# SECTION 3: GRAFANA INSTALLATION (Binary Method + Auto Provisioning)
 # ============================================================
 
 echo ""
-echo "=== Step 3: Installing Grafana (Binary) ==="
+echo "=== Step 3: Installing Grafana with Auto-Provisioned Dashboards ==="
 
 # Download Grafana binary
 cd /tmp
@@ -219,6 +219,265 @@ useradd --no-create-home --shell /bin/false grafana 2>/dev/null || true
 
 # Move to /opt
 mv grafana-10.2.0 /opt/grafana
+chown -R grafana:grafana /opt/grafana
+
+# Create Grafana provisioning directories
+mkdir -p /etc/grafana/provisioning/dashboards
+mkdir -p /etc/grafana/provisioning/datasources
+mkdir -p /opt/grafana/dashboards
+
+# Create datasources provisioning config
+cat > /etc/grafana/provisioning/datasources/prometheus.yml << 'DATASOURCES_CONFIG'
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://localhost:9090
+    isDefault: true
+    editable: true
+DATASOURCES_CONFIG
+
+# Create dashboards provisioning config
+cat > /etc/grafana/provisioning/dashboards/dashboards.yml << 'DASHBOARDS_CONFIG'
+apiVersion: 1
+
+providers:
+  - name: 'System Dashboards'
+    orgId: 1
+    folder: 'System'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /opt/grafana/dashboards
+DASHBOARDS_CONFIG
+
+# Create System Health Dashboard
+cat > /opt/grafana/dashboards/system-health.json << 'SYSTEM_DASHBOARD'
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 90}
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 2,
+      "targets": [
+        {
+          "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU Usage",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 90}
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 3,
+      "targets": [
+        {
+          "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Usage",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 4,
+      "targets": [
+        {"expr": "node_load1", "legendFormat": "1m", "refId": "A"},
+        {"expr": "node_load5", "legendFormat": "5m", "refId": "B"},
+        {"expr": "node_load15", "legendFormat": "15m", "refId": "C"}
+      ],
+      "title": "System Load",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 85}
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 5,
+      "targets": [
+        {
+          "expr": "(1 - (node_filesystem_avail_bytes{fstype=~\"ext4|xfs\"} / node_filesystem_size_bytes{fstype=~\"ext4|xfs\"})) * 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Disk Usage",
+      "type": "gauge"
+    }
+  ],
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": ["system", "monitoring"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "",
+  "title": "System Health",
+  "uid": "system-health",
+  "version": 0
+}
+SYSTEM_DASHBOARD
+
+# Create Network Metrics Dashboard
+cat > /opt/grafana/dashboards/network-metrics.json << 'NETWORK_DASHBOARD'
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Bytes/sec",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 2,
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_bytes_total{device=\"eth0\"}[5m])",
+          "legendFormat": "Receive",
+          "refId": "A"
+        }
+      ],
+      "title": "Network Receive Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "Bytes/sec",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 3,
+      "targets": [
+        {
+          "expr": "rate(node_network_transmit_bytes_total{device=\"eth0\"}[5m])",
+          "legendFormat": "Transmit",
+          "refId": "A"
+        }
+      ],
+      "title": "Network Transmit Rate",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": ["network", "monitoring"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "",
+  "title": "Network Metrics",
+  "uid": "network-metrics",
+  "version": 0
+}
+NETWORK_DASHBOARD
+
+# Fix permissions
+chown -R grafana:grafana /etc/grafana
 chown -R grafana:grafana /opt/grafana
 
 # Create systemd service
@@ -246,24 +505,5 @@ systemctl daemon-reload
 systemctl enable grafana-server
 systemctl start grafana-server
 
-echo "✅ Grafana installed and running (port 3000)"
-
-# ============================================================
-# SECTION 4: CLEANUP
-# ============================================================
-
-echo ""
-echo "=== Cleanup ==="
-rm -rf /tmp/prometheus-*.tar.gz
-rm -rf /tmp/node_exporter-*.tar.gz
-rm -rf /tmp/prometheus-${PROM_VERSION}.linux-amd64
-rm -rf /tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64
-
-echo ""
-echo "=== Monitoring Stack Setup Complete ==="
-echo "Completed at: $(date)"
-echo ""
-echo "Service Status:"
-systemctl status prometheus --no-pager 2>&1 | grep -E "Active|Loaded" || true
-systemctl status node_exporter --no-pager 2>&1 | grep -E "Active|Loaded" || true
-systemctl status grafana-server --no-pager 2>&1 | grep -E "Active|Loaded" || true
+echo "✅ Grafana installed with auto-provisioned dashboards"
+echo "   Dashboards will be available after Grafana starts"
