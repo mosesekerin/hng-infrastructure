@@ -388,33 +388,70 @@ NGINX_UPDATE
 
 chmod +x /usr/local/bin/update-nginx-ssl.sh
 
-# ============================================================
+# # ============================================================
 # SECTION 12: DOWNLOAD AND EXECUTE MONITORING SETUP
 # ============================================================
 
 echo ""
 echo "=== Step 12: Setting up monitoring stack ==="
 
-# Download monitoring setup script from GitHub
 GITHUB_RAW="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/main/scripts/monitoring-setup.sh"
+MAX_RETRIES=5
+RETRY_COUNT=0
 
-echo "Downloading monitoring setup script from: $GITHUB_RAW"
+# Prepare log file with proper permissions
+mkdir -p /var/log
+touch /var/log/monitoring-setup.log
+chmod 666 /var/log/monitoring-setup.log
 
-if [ -f /tmp/monitoring-setup.sh ]; then
-  # Make sure log directory exists
-  mkdir -p /var/log
-  touch /var/log/monitoring-setup.log
-  chmod 666 /var/log/monitoring-setup.log
+echo "Attempting to download monitoring setup script..."
+echo "URL: $GITHUB_RAW" | tee -a /var/log/user-data.log
+
+# Retry loop for downloading
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  if curl -fsSL "$GITHUB_RAW" -o /tmp/monitoring-setup.sh 2>&1 | tee -a /var/log/user-data.log; then
+    if [ -f /tmp/monitoring-setup.sh ] && [ -s /tmp/monitoring-setup.sh ]; then
+      echo "✅ Download successful, file size: $(wc -c < /tmp/monitoring-setup.sh) bytes" | tee -a /var/log/user-data.log
+      chmod +x /tmp/monitoring-setup.sh
+      break
+    else
+      echo "⚠️ Download returned empty file, retrying..." | tee -a /var/log/user-data.log
+      RETRY_COUNT=$((RETRY_COUNT + 1))
+      sleep $((RETRY_COUNT * 5))  # Exponential backoff: 5s, 10s, 15s, 20s, 25s
+      continue
+    fi
+  else
+    echo "⚠️ Download failed (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES), retrying..." | tee -a /var/log/user-data.log
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    sleep $((RETRY_COUNT * 5))
+    continue
+  fi
+done
+
+# Execute monitoring setup if download succeeded
+if [ -f /tmp/monitoring-setup.sh ] && [ -s /tmp/monitoring-setup.sh ]; then
+  echo "✅ Starting monitoring stack setup in background..." | tee -a /var/log/user-data.log
   
-  # Run monitoring setup in background
+  # Run with nohup to ensure it survives even if user_data exits
   nohup bash /tmp/monitoring-setup.sh >> /var/log/monitoring-setup.log 2>&1 &
+  SETUP_PID=$!
+  echo "Monitoring setup PID: $SETUP_PID" | tee -a /var/log/user-data.log
   
-  sleep 2  # Give it time to start
-  
-  echo "✅ Monitoring stack setup started (running in background)"
-  echo "   Check progress: tail -f /var/log/monitoring-setup.log"
+  # Wait up to 5 minutes for key services to start
+  echo "Waiting for monitoring services to start (timeout: 5 minutes)..." | tee -a /var/log/user-data.log
+  for i in {1..60}; do
+    sleep 5
+    if systemctl is-active --quiet prometheus 2>/dev/null && \
+       systemctl is-active --quiet node_exporter 2>/dev/null; then
+      echo "✅ Monitoring services started successfully!" | tee -a /var/log/user-data.log
+      break
+    fi
+    if [ $((i % 6)) -eq 0 ]; then
+      echo "   Waiting... ($((i * 5))s elapsed)" | tee -a /var/log/user-data.log
+    fi
+  done
 else
-  echo "❌ Failed to download monitoring setup script"
-  echo "   URL: $GITHUB_RAW"
-  echo "   This is non-critical - can be run manually later"
+  echo "❌ Failed to download monitoring setup script after $MAX_RETRIES attempts" | tee -a /var/log/user-data.log
+  echo "   URL: $GITHUB_RAW" | tee -a /var/log/user-data.log
+  echo "   The monitoring stack will need to be set up manually or the instance can be recreated" | tee -a /var/log/user-data.log
 fi
