@@ -158,6 +158,8 @@ ufw allow 80/tcp    # HTTP
 ufw allow 443/tcp   # HTTPS
 ufw allow 9090/tcp  # Prometheus
 ufw allow 3000/tcp  # Grafana
+ufw allow 3100/tcp  # Loki
+ufw allow 9080/tcp  # Promtail
 ufw --force enable
 
 # ============================================================
@@ -389,30 +391,37 @@ NGINX_UPDATE
 chmod +x /usr/local/bin/update-nginx-ssl.sh
 
 # ============================================================
-# SECTION 12: DOWNLOAD AND EXECUTE MONITORING SETUP
+# SECTION 12: DOWNLOAD AND EXECUTE MONITORING & LOGGING SETUP
 # ============================================================
 
 echo ""
-echo "=== Step 12: Setting up monitoring stack ==="
+echo "=== Step 12: Setting up monitoring and logging stack ==="
 
-GITHUB_RAW="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/main/scripts/monitoring-setup.sh"
-
-# Download monitoring setup script
-if curl -fsSL "$GITHUB_RAW" -o /tmp/monitoring-setup.sh 2>/dev/null; then
+# Download and run monitoring setup
+GITHUB_MONITORING="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/main/scripts/monitoring-setup.sh"
+if curl -fsSL "$GITHUB_MONITORING" -o /tmp/monitoring-setup.sh 2>/dev/null; then
   chmod +x /tmp/monitoring-setup.sh
-  
-  # Prepare log file
   mkdir -p /var/log
   touch /var/log/monitoring-setup.log
   chmod 666 /var/log/monitoring-setup.log
-  
-  # Run in background
   nohup bash /tmp/monitoring-setup.sh >> /var/log/monitoring-setup.log 2>&1 &
-  
-  echo "✅ Monitoring stack setup started (running in background)"
-  echo "   Check progress: tail -f /var/log/monitoring-setup.log"
+  echo "✅ Monitoring stack setup started"
 else
   echo "⚠️  Could not download monitoring setup script"
-  echo "   URL: $GITHUB_RAW"
-  echo "   Run manually later if needed"
 fi
+
+# Download and run Loki setup (logging)
+GITHUB_LOKI="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/main/scripts/loki-setup.sh"
+if curl -fsSL "$GITHUB_LOKI" -o /tmp/loki-setup.sh 2>/dev/null; then
+  chmod +x /tmp/loki-setup.sh
+  mkdir -p /var/log
+  touch /var/log/loki-setup.log
+  chmod 666 /var/log/loki-setup.log
+  nohup bash /tmp/loki-setup.sh >> /var/log/loki-setup.log 2>&1 &
+  echo "✅ Loki & Promtail setup started"
+else
+  echo "⚠️  Could not download loki setup script"
+fi
+
+echo "   Check progress: tail -f /var/log/monitoring-setup.log"
+echo "   Check progress: tail -f /var/log/loki-setup.log"
