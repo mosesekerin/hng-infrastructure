@@ -136,6 +136,7 @@ echo "=== Step 4: Installing Certbot ==="
 apt-get install -y certbot python3-certbot-nginx
 
 # Create renewal hook script that will be run after cert renewal
+mkdir -p /etc/letsencrypt/renewal-hooks/post
 cat > /etc/letsencrypt/renewal-hooks/post/nginx-reload.sh << 'RENEWAL_HOOK'
 #!/bin/bash
 systemctl reload nginx
@@ -396,36 +397,21 @@ echo "=== Step 12: Setting up monitoring stack ==="
 # Download monitoring setup script from GitHub
 GITHUB_RAW="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/main/scripts/monitoring-setup.sh"
 
-curl -fsSL "$GITHUB_RAW" -o /tmp/monitoring-setup.sh
-chmod +x /tmp/monitoring-setup.sh
+echo "Downloading monitoring setup script from: $GITHUB_RAW"
 
-# Execute with background job (don't block user_data)
-if [ -f /tmp/monitoring-setup.sh ]; then
-  /tmp/monitoring-setup.sh >> /var/log/monitoring-setup.log 2>&1 &
+if curl -fsSL "$GITHUB_RAW" -o /tmp/monitoring-setup.sh 2>&1 | tee -a /var/log/user-data.log; then
+  chmod +x /tmp/monitoring-setup.sh
+  
+  # Execute with background job (don't block user_data)
+  # Run with sudo to ensure all privileged operations work
+  sudo -u root bash -c '/tmp/monitoring-setup.sh >> /var/log/monitoring-setup.log 2>&1 &'
+  
+  sleep 2  # Give it time to start
+  
   echo "✅ Monitoring stack setup started (running in background)"
   echo "   Check progress: tail -f /var/log/monitoring-setup.log"
 else
   echo "❌ Failed to download monitoring setup script"
   echo "   URL: $GITHUB_RAW"
+  echo "   This is non-critical - can be run manually later"
 fi
-
-# ============================================================
-# SECTION 13: Final Status
-# ============================================================
-
-echo ""
-echo "=== User Data Script Complete ==="
-echo "Completed at: $(date)"
-echo ""
-echo "Services Status:"
-systemctl status nginx --no-pager | grep -E "Active|Loaded"
-systemctl status docker --no-pager | grep -E "Active|Loaded"
-systemctl status ssh --no-pager | grep -E "Active|Loaded"
-echo ""
-echo "✅ System initialization complete!"
-echo ""
-echo "Next steps:"
-echo "1. SSH into instance"
-echo "2. Run: setup-ssl.sh yourdomain.com your@email.com"
-echo "3. Run: update-nginx-ssl.sh yourdomain.com"
-echo "4. Verify HTTPS works"
