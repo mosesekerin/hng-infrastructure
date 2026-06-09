@@ -199,6 +199,7 @@ chmod 755 /opt/hng
 echo "=== Step 9: Creating systemd service templates ==="
 
 # Enhanced Nginx service with auto-restart
+mkdir -p /etc/systemd/system/nginx.service.d
 cat > /etc/systemd/system/nginx.service.d/override.conf << 'NGINX_SERVICE'
 [Service]
 Restart=on-failure
@@ -399,12 +400,14 @@ GITHUB_RAW="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/mai
 
 echo "Downloading monitoring setup script from: $GITHUB_RAW"
 
-if curl -fsSL "$GITHUB_RAW" -o /tmp/monitoring-setup.sh 2>&1 | tee -a /var/log/user-data.log; then
-  chmod +x /tmp/monitoring-setup.sh
+if [ -f /tmp/monitoring-setup.sh ]; then
+  # Make sure log directory exists
+  mkdir -p /var/log
+  touch /var/log/monitoring-setup.log
+  chmod 666 /var/log/monitoring-setup.log
   
-  # Execute with background job (don't block user_data)
-  # Run with sudo to ensure all privileged operations work
-  sudo -u root bash -c '/tmp/monitoring-setup.sh >> /var/log/monitoring-setup.log 2>&1 &'
+  # Run monitoring setup in background
+  nohup bash /tmp/monitoring-setup.sh >> /var/log/monitoring-setup.log 2>&1 &
   
   sleep 2  # Give it time to start
   
