@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Loki Stack Installation Script
+# Loki Stack Installation Script (CORRECTED FOR AUTOMATION)
 # Downloaded and executed by user_data.sh
 # Installs: Loki (log aggregation) + Promtail (log shipper)
 
@@ -21,11 +21,21 @@ echo "=== Step 1: Installing Loki (Log Aggregation Engine) ==="
 # Create loki user
 useradd --no-create-home --shell /bin/false loki 2>/dev/null || true
 
-# Create directories
-mkdir -p /var/lib/loki
+# FIX #1: Create ALL nested directories including compactor subdirectories
+# This was the main issue: /var/lib/loki/compactor/deletion/delete_requests didn't exist
+mkdir -p /var/lib/loki/boltdb-shipper-active
+mkdir -p /var/lib/loki/boltdb-shipper-cache
+mkdir -p /var/lib/loki/chunks
+mkdir -p /var/lib/loki/compactor/deletion/delete_requests
+mkdir -p /var/lib/loki/compactor/compaction
+
+# FIX #2: Proper permissions - 755 for directories, loki owner
+chown -R loki:loki /var/lib/loki
+chmod -R 755 /var/lib/loki
+
 mkdir -p /etc/loki
-chown loki:loki /var/lib/loki
 chown loki:loki /etc/loki
+chmod 755 /etc/loki
 
 # Download and install Loki binary
 LOKI_VERSION="2.9.4"
@@ -39,26 +49,21 @@ chown loki:loki /usr/local/bin/loki
 
 cd /
 
-# Create Loki configuration file
+# FIX #3: Use CORRECTED Loki config (removed invalid fields, added compactor section)
 cat > /etc/loki/loki-config.yml << 'LOKI_CONFIG'
 auth_enabled: false
 
 ingester:
   chunk_idle_period: 3m
   chunk_retain_period: 1m
-  max_chunk_age: 1h
-  chunk_size_target: 1048576
-  enforce_metric_name: false
+  max_chunk_age: 2h
   lifecycler:
     ring:
       kvstore:
         store: inmemory
       replication_factor: 1
-    num_tokens: 128
-    heartbeat_timeout: 5m
 
 limits_config:
-  enforce_metric_name: false
   reject_old_samples: true
   reject_old_samples_max_age: 168h
   ingestion_rate_mb: 10
@@ -67,7 +72,7 @@ limits_config:
 
 schema_config:
   configs:
-    - from: 2020-10-24
+    - from: 2020-01-01
       store: boltdb-shipper
       object_store: filesystem
       schema: v11
@@ -78,44 +83,58 @@ schema_config:
 server:
   http_listen_port: 3100
   log_level: info
+  grpc_listen_port: 9096
 
 storage_config:
   boltdb_shipper:
     active_index_directory: /var/lib/loki/boltdb-shipper-active
     shared_store: filesystem
+    cache_location: /var/lib/loki/boltdb-shipper-cache
   filesystem:
     directory: /var/lib/loki/chunks
 
 chunk_store_config:
   max_look_back_period: 0s
 
-table_manager:
-  retention_deletes_enabled: false
-  retention_period: 0s
+compactor:
+  working_directory: /var/lib/loki/compactor
+  shared_store: filesystem
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 5m
+  retention_delete_worker_count: 10
 
-retention_config:
-  enabled: true
-  default_days: 30
+table_manager:
+  retention_deletes_enabled: true
+  retention_period: 720h
 LOKI_CONFIG
 
 chown loki:loki /etc/loki/loki-config.yml
+chmod 644 /etc/loki/loki-config.yml
 
-# Create Loki systemd service
+# FIX #4: Corrected systemd service (Type=simple, WorkingDirectory, proper logging)
 cat > /etc/systemd/system/loki.service << 'LOKI_SERVICE'
 [Unit]
 Description=Loki Log Aggregation Engine
+Documentation=https://grafana.com/docs/loki/latest/
 Wants=network-online.target
 After=network-online.target
 
 [Service]
+Type=simple
 User=loki
 Group=loki
-Type=simple
-ExecStart=/usr/local/bin/loki \
-  -config.file=/etc/loki/loki-config.yml
+WorkingDirectory=/var/lib/loki
+ExecStart=/usr/local/bin/loki -config.file=/etc/loki/loki-config.yml
 
 Restart=on-failure
 RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=loki
+
+LimitNOFILE=65536
+LimitNPROC=4096
 
 [Install]
 WantedBy=multi-user.target
@@ -125,7 +144,7 @@ systemctl daemon-reload
 systemctl enable loki
 systemctl start loki
 
-sleep 3  # Wait for Loki to start
+sleep 5  # Wait for Loki to start (increased from 3s for stability)
 
 echo "✅ Loki installed and running (port 3100)"
 
@@ -136,7 +155,24 @@ echo "✅ Loki installed and running (port 3100)"
 echo ""
 echo "=== Step 2: Provisioning Loki Datasource in Grafana ==="
 
-# Add Loki to Grafana datasources provisioning
+# FIX #5: Create datasource file if it doesn't exist BEFORE appending
+mkdir -p /etc/grafana/provisioning/datasources
+
+if [ ! -f /etc/grafana/provisioning/datasources/prometheus.yml ]; then
+  cat > /etc/grafana/provisioning/datasources/prometheus.yml << 'DATASOURCES_BASE'
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://localhost:9090
+    isDefault: true
+    editable: true
+DATASOURCES_BASE
+fi
+
+# Now safely append Loki datasource
 cat >> /etc/grafana/provisioning/datasources/prometheus.yml << 'LOKI_DATASOURCE'
 
   - name: Loki
@@ -162,6 +198,9 @@ echo "=== Step 3: Installing Promtail (Log Shipper) ==="
 # Create promtail user
 useradd --no-create-home --shell /bin/false promtail 2>/dev/null || true
 
+# FIX #6: Add promtail to groups so it can read log files
+usermod -a -G www-data,adm promtail 2>/dev/null || true
+
 # Download and install Promtail binary
 PROMTAIL_VERSION="2.9.4"
 cd /tmp
@@ -172,14 +211,18 @@ cp promtail-linux-amd64 /usr/local/bin/promtail
 chmod +x /usr/local/bin/promtail
 chown promtail:promtail /usr/local/bin/promtail
 
-# Create Promtail configuration
+# Create Promtail configuration directory and file
+mkdir -p /etc/promtail
+mkdir -p /var/lib/promtail
+
+# FIX #7: Simplified promtail config - removed complex pipeline stages that can fail silently
 cat > /etc/promtail/promtail-config.yml << 'PROMTAIL_CONFIG'
 server:
   http_listen_port: 9080
   log_level: info
 
 positions:
-  filename: /tmp/positions.yaml
+  filename: /var/lib/promtail/positions.yaml
 
 clients:
   - url: http://localhost:3100/loki/api/v1/push
@@ -193,11 +236,6 @@ scrape_configs:
         labels:
           job: nginx-access
           __path__: /var/log/nginx/access.log
-    pipeline_stages:
-      - regex:
-          expression: '(?P<remote_addr>[\w\.]+) - (?P<remote_user>[\w\.\-]*) \[(?P<timestamp>[\w:/]+\s[+\-]\d{4})\] "(?P<request>[\w\s\.\-_]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)" (?P<request_time>[\d\.]+)'
-      - labels:
-          status: status
 
   # Nginx Error Logs
   - job_name: nginx-error
@@ -207,11 +245,6 @@ scrape_configs:
         labels:
           job: nginx-error
           __path__: /var/log/nginx/error.log
-    pipeline_stages:
-      - regex:
-          expression: '(?P<timestamp>\d{4}/\d{2}/\d{2}\s\d{2}:\d{2}:\d{2})\s\[(?P<severity>\w+)\]\s(?P<message>.*)'
-      - labels:
-          severity: severity
 
   # System Logs
   - job_name: syslog
@@ -221,11 +254,6 @@ scrape_configs:
         labels:
           job: syslog
           __path__: /var/log/syslog
-    pipeline_stages:
-      - regex:
-          expression: '(?P<timestamp>\w+\s+\d+\s\d{2}:\d{2}:\d{2})\s(?P<hostname>[\w\-\.]+)\s(?P<program>[\w\-\.]+)(?:\[(?P<pid>\d+)\])?:\s(?P<message>.*)'
-      - labels:
-          program: program
 
   # Auth Logs
   - job_name: auth-log
@@ -235,11 +263,6 @@ scrape_configs:
         labels:
           job: auth
           __path__: /var/log/auth.log
-    pipeline_stages:
-      - regex:
-          expression: '(?P<timestamp>\w+\s+\d+\s\d{2}:\d{2}:\d{2})\s(?P<hostname>[\w\-\.]+)\s(?P<program>[\w\-\.]+)(?:\[(?P<pid>\d+)\])?:\s(?P<message>.*)'
-      - labels:
-          program: program
 
   # Prometheus Logs
   - job_name: prometheus-log
@@ -249,36 +272,38 @@ scrape_configs:
         labels:
           job: prometheus
           __path__: /var/log/prometheus.log
-    pipeline_stages:
-      - json:
-          expressions:
-            timestamp: ts
-            level: level
-            message: msg
-      - labels:
-          level: level
 PROMTAIL_CONFIG
 
-mkdir -p /etc/promtail
+chown promtail:promtail /etc/promtail
+chown promtail:promtail /var/lib/promtail
+chmod 755 /etc/promtail
+chmod 755 /var/lib/promtail
 chown promtail:promtail /etc/promtail/promtail-config.yml
+chmod 644 /etc/promtail/promtail-config.yml
 
 # Create Promtail systemd service
 cat > /etc/systemd/system/promtail.service << 'PROMTAIL_SERVICE'
 [Unit]
 Description=Promtail Log Shipper
+Documentation=https://grafana.com/docs/loki/latest/
 Wants=network-online.target
 After=network-online.target
 After=loki.service
 
 [Service]
+Type=simple
 User=promtail
 Group=promtail
-Type=simple
-ExecStart=/usr/local/bin/promtail \
-  -config.file=/etc/promtail/promtail-config.yml
+WorkingDirectory=/var/lib/promtail
+ExecStart=/usr/local/bin/promtail -config.file=/etc/promtail/promtail-config.yml
 
 Restart=on-failure
 RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=promtail
+
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
@@ -288,7 +313,7 @@ systemctl daemon-reload
 systemctl enable promtail
 systemctl start promtail
 
-sleep 2  # Wait for Promtail to start
+sleep 3  # Wait for Promtail to start
 
 echo "✅ Promtail installed and running (port 9080)"
 
@@ -298,6 +323,8 @@ echo "✅ Promtail installed and running (port 9080)"
 
 echo ""
 echo "=== Step 4: Creating Logs Dashboard in Grafana ==="
+
+mkdir -p /opt/grafana/dashboards
 
 # Create Loki logs dashboard
 cat > /opt/grafana/dashboards/logs-dashboard.json << 'LOGS_DASHBOARD'
@@ -316,7 +343,7 @@ cat > /opt/grafana/dashboards/logs-dashboard.json << 'LOGS_DASHBOARD'
       "id": 2,
       "targets": [
         {
-          "expr": "{job=\"nginx-access\"} | json",
+          "expr": "{job=\"nginx-access\"}",
           "refId": "A"
         }
       ],
@@ -379,6 +406,7 @@ cat > /opt/grafana/dashboards/logs-dashboard.json << 'LOGS_DASHBOARD'
 LOGS_DASHBOARD
 
 chown grafana:grafana /opt/grafana/dashboards/logs-dashboard.json
+chmod 644 /opt/grafana/dashboards/logs-dashboard.json
 
 echo "✅ Logs dashboard created"
 
@@ -392,13 +420,14 @@ echo "✅ Loki running on port 3100"
 echo "✅ Promtail shipping logs to Loki"
 echo "✅ Loki datasource provisioned in Grafana"
 echo "✅ Logs dashboard created"
+echo "✅ 30-day log retention configured"
 echo ""
 echo "Centralized Logging Active:"
 echo "  - Nginx access logs"
 echo "  - Nginx error logs"
 echo "  - System logs"
 echo "  - Auth logs"
-echo "  - 30-day retention"
+echo "  - Prometheus logs"
 echo ""
 echo "Access logs in Grafana:"
 echo "  1. Open Grafana (port 3000)"

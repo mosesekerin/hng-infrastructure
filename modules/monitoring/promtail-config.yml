@@ -2,12 +2,15 @@ server:
   http_listen_port: 9080
   log_level: info
 
+# FIX #1: Changed positions file location from /tmp (ephemeral) to /var/lib/promtail (persistent)
 positions:
-  filename: /tmp/positions.yaml
+  filename: /var/lib/promtail/positions.yaml
 
 clients:
   - url: http://localhost:3100/loki/api/v1/push
 
+# FIX #2: Removed complex pipeline_stages that can fail silently
+# Keep it simple: ship logs first, parse in Grafana if needed
 scrape_configs:
   # Nginx Access Logs
   - job_name: nginx-access
@@ -17,11 +20,6 @@ scrape_configs:
         labels:
           job: nginx-access
           __path__: /var/log/nginx/access.log
-    pipeline_stages:
-      - regex:
-          expression: '(?P<remote_addr>[\w\.]+) - (?P<remote_user>[\w\.\-]*) \[(?P<timestamp>[\w:/]+\s[+\-]\d{4})\] "(?P<request>[\w\s\.\-_]+)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)" (?P<request_time>[\d\.]+)'
-      - labels:
-          status: status
 
   # Nginx Error Logs
   - job_name: nginx-error
@@ -31,11 +29,6 @@ scrape_configs:
         labels:
           job: nginx-error
           __path__: /var/log/nginx/error.log
-    pipeline_stages:
-      - regex:
-          expression: '(?P<timestamp>\d{4}/\d{2}/\d{2}\s\d{2}:\d{2}:\d{2})\s\[(?P<severity>\w+)\]\s(?P<message>.*)'
-      - labels:
-          severity: severity
 
   # System Logs
   - job_name: syslog
@@ -45,11 +38,6 @@ scrape_configs:
         labels:
           job: syslog
           __path__: /var/log/syslog
-    pipeline_stages:
-      - regex:
-          expression: '(?P<timestamp>\w+\s+\d+\s\d{2}:\d{2}:\d{2})\s(?P<hostname>[\w\-\.]+)\s(?P<program>[\w\-\.]+)(?:\[(?P<pid>\d+)\])?:\s(?P<message>.*)'
-      - labels:
-          program: program
 
   # Auth Logs
   - job_name: auth-log
@@ -59,11 +47,6 @@ scrape_configs:
         labels:
           job: auth
           __path__: /var/log/auth.log
-    pipeline_stages:
-      - regex:
-          expression: '(?P<timestamp>\w+\s+\d+\s\d{2}:\d{2}:\d{2})\s(?P<hostname>[\w\-\.]+)\s(?P<program>[\w\-\.]+)(?:\[(?P<pid>\d+)\])?:\s(?P<message>.*)'
-      - labels:
-          program: program
 
   # Prometheus Logs
   - job_name: prometheus-log
@@ -73,11 +56,3 @@ scrape_configs:
         labels:
           job: prometheus
           __path__: /var/log/prometheus.log
-    pipeline_stages:
-      - json:
-          expressions:
-            timestamp: ts
-            level: level
-            message: msg
-      - labels:
-          level: level
