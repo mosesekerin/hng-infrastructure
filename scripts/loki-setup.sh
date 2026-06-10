@@ -183,8 +183,12 @@ cat >> /etc/grafana/provisioning/datasources/prometheus.yml << 'LOKI_DATASOURCE'
     editable: true
 LOKI_DATASOURCE
 
-# Reload Grafana to pick up new datasource
-systemctl reload grafana-server
+# Reload Grafana to pick up new datasource (non-fatal if grafana isn't ready yet)
+systemctl reload grafana-server 2>/dev/null || {
+  echo "⚠️  Grafana not ready yet, will reload on next startup"
+  sleep 2
+  systemctl reload grafana-server 2>/dev/null || true
+}
 
 echo "✅ Loki datasource provisioned in Grafana"
 
@@ -195,11 +199,20 @@ echo "✅ Loki datasource provisioned in Grafana"
 echo ""
 echo "=== Step 3: Installing Promtail (Log Shipper) ==="
 
-# Create promtail user
-useradd --no-create-home --shell /bin/false promtail 2>/dev/null || true
+# FIX #6: Create promtail user with proper system account flags
+# Use --system to create system account (UID < 1000, proper system user)
+useradd --system --no-create-home --shell /bin/false promtail 2>/dev/null || {
+  echo "⚠️  Promtail user already exists, updating groups..."
+}
 
-# FIX #6: Add promtail to groups so it can read log files
+# Add to groups so it can read log files (www-data for nginx logs, adm for syslog)
 usermod -a -G www-data,adm promtail 2>/dev/null || true
+
+# Verify user was created successfully
+if ! id promtail >/dev/null 2>&1; then
+  echo "❌ ERROR: Promtail user creation failed!"
+  exit 1
+fi
 
 # Download and install Promtail binary
 PROMTAIL_VERSION="2.9.4"
