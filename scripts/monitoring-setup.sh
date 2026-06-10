@@ -1,8 +1,9 @@
 #!/bin/bash
 set -e
 
-# Monitoring Stack Installation Script
+# Monitoring Stack Installation Script (CORRECTED)
 # Downloaded and executed by user_data.sh
+# Fixes: Grafana symlinks + systemd service paths
 
 exec > >(tee /var/log/monitoring-setup.log)
 exec 2>&1
@@ -203,7 +204,7 @@ systemctl start node_exporter
 echo "✅ Node Exporter installed and running (port 9100)"
 
 # ============================================================
-# SECTION 3: GRAFANA INSTALLATION (Binary Method + Auto Provisioning)
+# SECTION 3: GRAFANA INSTALLATION (Binary Method + Auto Provisioning) - CORRECTED
 # ============================================================
 
 echo ""
@@ -215,11 +216,17 @@ wget https://dl.grafana.com/oss/release/grafana-10.2.0.linux-amd64.tar.gz
 tar -xzf grafana-10.2.0.linux-amd64.tar.gz
 
 # Create grafana user
-useradd --no-create-home --shell /bin/false grafana 2>/dev/null || true
+useradd --system --no-create-home --shell /bin/false grafana 2>/dev/null || true
 
 # Move to /opt
 mv grafana-10.2.0 /opt/grafana
 chown -R grafana:grafana /opt/grafana
+
+# FIX #1: Create symlinks so systemd service and direct calls work
+# Prevents path confusion during automation
+mkdir -p /opt/grafana/bin
+ln -sf /opt/grafana/grafana-10.2.0/bin/grafana-server /opt/grafana/bin/grafana-server
+ln -sf /opt/grafana/grafana-10.2.0/bin/grafana-cli /opt/grafana/bin/grafana-cli
 
 # Create Grafana provisioning directories
 mkdir -p /etc/grafana/provisioning/dashboards
@@ -480,21 +487,30 @@ NETWORK_DASHBOARD
 chown -R grafana:grafana /etc/grafana
 chown -R grafana:grafana /opt/grafana
 
-# Create systemd service
+# FIX #2: Correct systemd service with proper paths and working directory
 cat > /etc/systemd/system/grafana-server.service << 'GRAFANA_SERVICE'
 [Unit]
 Description=Grafana
-After=network-online.target
+Documentation=https://grafana.com/docs/grafana/latest/
 Wants=network-online.target
+After=network-online.target
 
 [Service]
+Type=simple
 User=grafana
 Group=grafana
-Type=simple
-ExecStart=/opt/grafana/bin/grafana-server --config=/opt/grafana/conf/defaults.ini --homepath=/opt/grafana
+WorkingDirectory=/opt/grafana/grafana-10.2.0
+ExecStart=/opt/grafana/bin/grafana-server \
+  --config=/opt/grafana/grafana-10.2.0/conf/defaults.ini \
+  --homepath=/opt/grafana/grafana-10.2.0
 
 Restart=on-failure
 RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=grafana
+
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
