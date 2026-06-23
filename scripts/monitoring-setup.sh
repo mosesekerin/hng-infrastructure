@@ -218,15 +218,17 @@ tar -xzf grafana-10.2.0.linux-amd64.tar.gz
 # Create grafana user
 useradd --system --no-create-home --shell /bin/false grafana 2>/dev/null || true
 
-# Move to /opt
+# Move to /opt (this creates /opt/grafana/ with bin/, conf/, etc. at top level)
 mv grafana-10.2.0 /opt/grafana
 chown -R grafana:grafana /opt/grafana
 
-# FIX #1: Create symlinks so systemd service and direct calls work
-# Prevents path confusion during automation
-mkdir -p /opt/grafana/bin
-ln -sf /opt/grafana/grafana-10.2.0/bin/grafana-server /opt/grafana/bin/grafana-server
-ln -sf /opt/grafana/grafana-10.2.0/bin/grafana-cli /opt/grafana/bin/grafana-cli
+# Verify binary exists
+if [ ! -f /opt/grafana/bin/grafana-server ]; then
+  echo "❌ ERROR: Grafana binary not found at /opt/grafana/bin/grafana-server"
+  exit 1
+fi
+
+echo "✅ Grafana binary verified at /opt/grafana/bin/grafana-server"
 
 # Create Grafana provisioning directories
 mkdir -p /etc/grafana/provisioning/dashboards
@@ -487,7 +489,7 @@ NETWORK_DASHBOARD
 chown -R grafana:grafana /etc/grafana
 chown -R grafana:grafana /opt/grafana
 
-# FIX #2: Correct systemd service with proper paths and working directory
+# FIX: Correct systemd service with proper paths
 cat > /etc/systemd/system/grafana-server.service << 'GRAFANA_SERVICE'
 [Unit]
 Description=Grafana
@@ -499,10 +501,10 @@ After=network-online.target
 Type=simple
 User=grafana
 Group=grafana
-WorkingDirectory=/opt/grafana/grafana-10.2.0
+WorkingDirectory=/opt/grafana
 ExecStart=/opt/grafana/bin/grafana-server \
-  --config=/opt/grafana/grafana-10.2.0/conf/defaults.ini \
-  --homepath=/opt/grafana/grafana-10.2.0
+  --config=/opt/grafana/conf/defaults.ini \
+  --homepath=/opt/grafana
 
 Restart=on-failure
 RestartSec=5s
