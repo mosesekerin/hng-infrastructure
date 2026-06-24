@@ -218,6 +218,9 @@ tar -xzf grafana-10.2.0.linux-amd64.tar.gz
 # Create grafana user
 useradd --system --no-create-home --shell /bin/false grafana 2>/dev/null || true
 
+# Remove any existing Grafana installation (handles re-runs on same server)
+rm -rf /opt/grafana
+
 # Move to /opt (this creates /opt/grafana/ with bin/, conf/, etc. at top level)
 mv grafana-10.2.0 /opt/grafana
 chown -R grafana:grafana /opt/grafana
