@@ -1,0 +1,93 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'environments/prod/**'
+      - 'modules/**'
+      - '.github/workflows/apply.yml'
+
+env:
+  TF_VERSION: 1.5.0
+  AWS_REGION: us-east-1
+
+jobs:
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    # Manual approval before running
+    environment:
+      name: production
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-terraform
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      
+      - name: Terraform Init
+        id: init
+        working-directory: environments/prod
+        run: terraform init
+      
+      - name: Terraform Plan
+        id: plan
+        working-directory: environments/prod
+        run: terraform plan -no-color
+      
+      - name: Terraform Apply
+        id: apply
+        working-directory: environments/prod
+        run: terraform apply -auto-approve -no-color
+      
+      - name: Get Outputs
+        id: outputs
+        working-directory: environments/prod
+        run: |
+          echo "instance_ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
+          echo "domain=$(terraform output -raw domain_name)" >> $GITHUB_OUTPUT
+      
+      - name: Create Deployment Summary
+        if: always()
+        working-directory: environments/prod
+        run: |
+          echo "## 🚀 Terraform Apply Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.apply.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.apply.outcome }}" == "success" ]; then
+            echo "✅ Infrastructure deployed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
+            echo "- **Instance IP:** ${{ steps.outputs.outputs.instance_ip }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Domain:** ${{ steps.outputs.outputs.domain }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Timestamp:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Access Points" >> $GITHUB_STEP_SUMMARY
+            echo "- SSH: \`ssh -i ~/.ssh/hng-infrastructure.pem ubuntu@${{ steps.outputs.outputs.instance_ip }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Grafana: \`http://${{ steps.outputs.outputs.instance_ip }}:3000\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Prometheus: \`http://${{ steps.outputs.outputs.instance_ip }}:9090\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Terraform apply failed" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Fail if apply failed
+        if: steps.apply.outcome == 'failure'
+        run: exit 1

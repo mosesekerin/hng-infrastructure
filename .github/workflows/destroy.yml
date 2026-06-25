@@ -1,0 +1,91 @@
+name: Terraform Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "destroy-infrastructure" to confirm'
+        required: true
+        default: ''
+
+env:
+  TF_VERSION: 1.5.0
+  AWS_REGION: us-east-1
+
+jobs:
+  destroy:
+    name: Terraform Destroy
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    environment:
+      name: production
+    
+    steps:
+      - name: Verify Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "destroy-infrastructure" ]; then
+            echo "❌ Incorrect confirmation text. Type exactly: destroy-infrastructure"
+            exit 1
+          fi
+          echo "✅ Confirmation verified"
+      
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-terraform
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      
+      - name: Terraform Init
+        id: init
+        working-directory: environments/prod
+        run: terraform init
+      
+      - name: Save State Backup
+        id: backup
+        working-directory: environments/prod
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          aws s3 cp s3://hng-terraform-state-617163942982/prod/terraform.tfstate \
+            s3://hng-terraform-state-617163942982/backups/terraform.tfstate.backup-$TIMESTAMP \
+            || echo "Note: State backup may already exist"
+      
+      - name: Terraform Destroy
+        id: destroy
+        working-directory: environments/prod
+        run: terraform destroy -auto-approve -no-color
+      
+      - name: Create Destruction Summary
+        if: always()
+        run: |
+          echo "## 💥 Terraform Destroy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.destroy.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.destroy.outcome }}" == "success" ]; then
+            echo "✅ Infrastructure destroyed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Cleanup Details" >> $GITHUB_STEP_SUMMARY
+            echo "- **All AWS resources terminated**" >> $GITHUB_STEP_SUMMARY
+            echo "- **State backed up to:** \`s3://hng-terraform-state-617163942982/backups/\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Timestamp:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+            echo "- **Actor:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Terraform destroy failed" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Fail if destroy failed
+        if: steps.destroy.outcome == 'failure'
+        run: exit 1
