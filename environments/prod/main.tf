@@ -87,3 +87,5 @@ module "monitoring" {
   instance_public_ip = module.compute.public_ip
   instance_id      = module.compute.instance_id
 }
+
+# Phase 6: Testing CI/CD pipeline
