@@ -1,7 +1,7 @@
 # Get latest Ubuntu 22.04 AMI
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477"]  # Canonical
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
@@ -37,8 +37,8 @@ resource "aws_instance" "web" {
 
   # User data: Initial setup script
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    environment = var.environment
-    hng_username = var.hng_username  
+    environment  = var.environment
+    hng_username = var.hng_username
   }))
 
   tags = {
@@ -46,7 +46,7 @@ resource "aws_instance" "web" {
     Environment = var.environment
   }
 
-#  monitoring = true  # Enable detailed CloudWatch monitoring
+  #  monitoring = true  # Enable detailed CloudWatch monitoring
 
   depends_on = [
     var.security_group_id

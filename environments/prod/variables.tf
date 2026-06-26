@@ -37,7 +37,7 @@ variable "root_volume_size" {
 variable "allowed_ssh_cidrs" {
   description = "CIDR blocks allowed for SSH"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # CHANGE THIS TO YOUR IP
+  default     = ["0.0.0.0/0"] # CHANGE THIS TO YOUR IP
 }
 
 variable "domain_name" {

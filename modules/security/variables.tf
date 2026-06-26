@@ -11,5 +11,5 @@ variable "environment" {
 variable "allowed_ssh_cidrs" {
   description = "CIDR blocks allowed for SSH"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Change to your IP!
+  default     = ["0.0.0.0/0"] # Change to your IP!
 }
