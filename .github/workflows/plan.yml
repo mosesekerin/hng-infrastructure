@@ -56,7 +56,7 @@ jobs:
         id: plan
         working-directory: environments/prod
         run: |
-          terraform plan -no-color -lock=false -out=tfplan
+          terraform plan -no-color -lock=false -var="domain_name=infra.mosesekerin.name.ng" -var="parent_domain=mosesekerin.name.ng" -var="hng_username=Timileyin-Your-SRE-Guy" -var="letsencrypt_email=mosesekerin@gmail.com" -out=tfplan
           terraform show -no-color tfplan > plan.txt
         continue-on-error: true
       

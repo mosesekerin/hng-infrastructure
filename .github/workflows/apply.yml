@@ -54,7 +54,7 @@ jobs:
       - name: Terraform Apply
         id: apply
         working-directory: environments/prod
-        run: terraform apply -auto-approve -no-color
+        run: terraform apply -auto-approve -var="domain_name=infra.mosesekerin.name.ng" -var="parent_domain=mosesekerin.name.ng" -var="hng_username=Timileyin-Your-SRE-Guy" -var="letsencrypt_email=mosesekerin@gmail.com" -no-color
       
       - name: Get Outputs
         id: outputs
