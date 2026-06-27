@@ -75,3 +75,4 @@ variable "ssh_private_key_path" {
   type        = string
   default     = "~/.ssh/hng-infrastructure.pem"
 }
+# test plan

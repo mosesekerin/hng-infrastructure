@@ -4,7 +4,7 @@
 
 resource "local_file" "prometheus_config" {
   filename = "${path.module}/prometheus.yml"
-  content  = templatefile("${path.module}/templates/prometheus.yml.tpl", {
+  content = templatefile("${path.module}/templates/prometheus.yml.tpl", {
     domain_name = var.domain_name
   })
 }
