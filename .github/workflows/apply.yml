@@ -49,12 +49,12 @@ jobs:
       - name: Terraform Plan
         id: plan
         working-directory: environments/prod
-        run: terraform plan -no-color -lock=false
+        run: terraform plan -no-color -lock=false -var-file=example.tfvars -lock=false
       
       - name: Terraform Apply
         id: apply
         working-directory: environments/prod
-        run: terraform apply -auto-approve -lock=false -var="domain_name=infra.mosesekerin.name.ng" -var="parent_domain=mosesekerin.name.ng" -var="hng_username=Timileyin-Your-SRE-Guy" -var="letsencrypt_email=mosesekerin@gmail.com" -no-color
+        run: terraform apply -auto-approve -lock=false -var-file=example.tfvars -var="domain_name=infra.mosesekerin.name.ng" -var="parent_domain=mosesekerin.name.ng" -var="hng_username=Timileyin-Your-SRE-Guy" -var="letsencrypt_email=mosesekerin@gmail.com" -no-color
       
       - name: Get Outputs
         id: outputs
