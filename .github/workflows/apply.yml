@@ -1,5 +1,8 @@
 name: Terraform Apply
 
+# WHEN DOES THIS RUN?
+# Answer: Every time code is pushed to the main branch
+# ONLY if files in environments/prod/ or modules/ changed
 on:
   push:
     branches:
@@ -9,53 +12,68 @@ on:
       - 'modules/**'
       - '.github/workflows/apply.yml'
 
+# Environment variables used in all steps
 env:
   TF_VERSION: 1.5.0
   AWS_REGION: us-east-1
 
 jobs:
+  # This job applies the terraform changes to AWS
   apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
     
+    # These are the GitHub Actions permissions this job needs
     permissions:
-      id-token: write
-      contents: read
+      id-token: write # Needed for OIDC authentication
+      contents: read  # Needed to read code from the repo
     
-    # Manual approval before running
+    # IMPORTANT: This creates a "Production" environment in GitHub
+    # GitHub will require manual approval before this job runs
     environment:
       name: production
     
     steps:
+      # STEP 1: Download your code from GitHub
       - name: Checkout Code
         uses: actions/checkout@v4
       
+      # STEP 2: Login to AWS using OIDC (no hardcoded credentials!)
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-terraform
           aws-region: ${{ env.AWS_REGION }}
       
+      # STEP 3: Install Terraform binary
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: ${{ env.TF_VERSION }}
       
+      # STEP 4: Download terraform modules and setup S3 backend
       - name: Terraform Init
         id: init
         working-directory: environments/prod
         run: terraform init
       
+      # STEP 5: Check what will change (same as plan.yml)
+      # This is just a sanity check before we apply
       - name: Terraform Plan
         id: plan
         working-directory: environments/prod
-        run: terraform plan -no-color -lock=false -var-file=example.tfvars -lock=false
+        run: terraform plan -no-color -lock=false -var-file=example.tfvars
       
+      # STEP 6: Actually make the changes in AWS
+      # -auto-approve: Don't ask for confirmation (already approved via GitHub environment)
+      # -lock=false: Don't try to lock state (not needed for apply in CI/CD)
+      # -var-file=example.tfvars: Use the variables file for all values
       - name: Terraform Apply
         id: apply
         working-directory: environments/prod
-        run: terraform apply -auto-approve -lock=false -var-file=example.tfvars -var="domain_name=infra.mosesekerin.name.ng" -var="parent_domain=mosesekerin.name.ng" -var="hng_username=Timileyin-Your-SRE-Guy" -var="letsencrypt_email=mosesekerin@gmail.com" -no-color
+        run: terraform apply -auto-approve -lock=false -var-file=example.tfvars -no-color
       
+      # STEP 7: Get the output values (like IP address, domain name)
       - name: Get Outputs
         id: outputs
         working-directory: environments/prod
@@ -63,6 +81,7 @@ jobs:
           echo "instance_ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
           echo "domain=$(terraform output -raw domain_name)" >> $GITHUB_OUTPUT
       
+      # STEP 8: Create a summary that shows up in the GitHub Actions UI
       - name: Create Deployment Summary
         if: always()
         working-directory: environments/prod
@@ -79,15 +98,11 @@ jobs:
             echo "- **Instance IP:** ${{ steps.outputs.outputs.instance_ip }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Domain:** ${{ steps.outputs.outputs.domain }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Timestamp:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Access Points" >> $GITHUB_STEP_SUMMARY
-            echo "- SSH: \`ssh -i ~/.ssh/hng-infrastructure.pem ubuntu@${{ steps.outputs.outputs.instance_ip }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "- Grafana: \`http://${{ steps.outputs.outputs.instance_ip }}:3000\`" >> $GITHUB_STEP_SUMMARY
-            echo "- Prometheus: \`http://${{ steps.outputs.outputs.instance_ip }}:9090\`" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Terraform apply failed" >> $GITHUB_STEP_SUMMARY
           fi
       
+      # STEP 9: Fail the job if apply failed
       - name: Fail if apply failed
         if: steps.apply.outcome == 'failure'
         run: exit 1

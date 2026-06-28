@@ -1,71 +1,91 @@
 name: Terraform Destroy
 
+# WHEN DOES THIS RUN?
+# Answer: ONLY when you manually trigger it from GitHub Actions
+# This prevents accidental infrastructure deletion
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: 'Type "destroy-infrastructure" to confirm'
+        description: 'Type "destroy-infrastructure" to confirm deletion'
         required: true
         default: ''
 
+# Environment variables used in all steps
 env:
   TF_VERSION: 1.5.0
   AWS_REGION: us-east-1
 
 jobs:
+  # This job destroys all infrastructure
   destroy:
     name: Terraform Destroy
     runs-on: ubuntu-latest
     
+    # These are the GitHub Actions permissions this job needs
     permissions:
-      id-token: write
-      contents: read
+      id-token: write # Needed for OIDC authentication
+      contents: read  # Needed to read code from the repo
     
+    # IMPORTANT: This creates a "Production" environment in GitHub
+    # GitHub will require manual approval before this job runs
     environment:
       name: production
     
     steps:
+      # STEP 1: Verify the user typed the correct confirmation
+      # This prevents accidents from misclicks
       - name: Verify Confirmation
         run: |
           if [ "${{ github.event.inputs.confirmation }}" != "destroy-infrastructure" ]; then
-            echo "❌ Incorrect confirmation text. Type exactly: destroy-infrastructure"
+            echo "❌ Incorrect confirmation text"
+            echo "You must type exactly: destroy-infrastructure"
             exit 1
           fi
-          echo "✅ Confirmation verified"
+          echo "✅ Confirmation verified - proceeding with destruction"
       
+      # STEP 2: Download your code from GitHub
       - name: Checkout Code
         uses: actions/checkout@v4
       
+      # STEP 3: Login to AWS using OIDC (no hardcoded credentials!)
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-terraform
           aws-region: ${{ env.AWS_REGION }}
       
+      # STEP 4: Install Terraform binary
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: ${{ env.TF_VERSION }}
       
+      # STEP 5: Download terraform modules and setup S3 backend
       - name: Terraform Init
         id: init
         working-directory: environments/prod
         run: terraform init
       
-      - name: Save State Backup
+      # STEP 6: Backup the state file before destroying
+      # This is a safety measure in case you need to recover
+      - name: Backup State Before Destroy
         id: backup
         working-directory: environments/prod
         run: |
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           aws s3 cp s3://hng-terraform-state-617163942982/prod/terraform.tfstate \
             s3://hng-terraform-state-617163942982/backups/terraform.tfstate.backup-$TIMESTAMP \
-            || echo "Note: State backup may already exist"
+            || echo "Note: Backup may have failed, but destruction will continue"
       
+      # STEP 7: Actually destroy all infrastructure in AWS
+      # -auto-approve: Don't ask for confirmation (already confirmed above)
       - name: Terraform Destroy
         id: destroy
         working-directory: environments/prod
-        run: terraform destroy -auto-approve -no-color
+        run: terraform destroy -auto-approve -var-file=example.tfvars -no-color
       
+      # STEP 8: Create a summary showing what was destroyed
       - name: Create Destruction Summary
         if: always()
         run: |
@@ -77,15 +97,24 @@ jobs:
           if [ "${{ steps.destroy.outcome }}" == "success" ]; then
             echo "✅ Infrastructure destroyed successfully" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Cleanup Details" >> $GITHUB_STEP_SUMMARY
-            echo "- **All AWS resources terminated**" >> $GITHUB_STEP_SUMMARY
-            echo "- **State backed up to:** \`s3://hng-terraform-state-617163942982/backups/\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Timestamp:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-            echo "- **Actor:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+            echo "### What was deleted:" >> $GITHUB_STEP_SUMMARY
+            echo "- 🗑️ EC2 instance" >> $GITHUB_STEP_SUMMARY
+            echo "- 🗑️ VPC and subnets" >> $GITHUB_STEP_SUMMARY
+            echo "- 🗑️ Security groups" >> $GITHUB_STEP_SUMMARY
+            echo "- 🗑️ Route53 DNS records" >> $GITHUB_STEP_SUMMARY
+            echo "- 🗑️ Elastic IP" >> $GITHUB_STEP_SUMMARY
+            echo "- 🗑️ Internet Gateway" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Backups:" >> $GITHUB_STEP_SUMMARY
+            echo "- State file backed up to: \`s3://hng-terraform-state-617163942982/backups/\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+            echo "- Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Terraform destroy failed" >> $GITHUB_STEP_SUMMARY
+            echo "Some resources may still exist in AWS" >> $GITHUB_STEP_SUMMARY
           fi
       
+      # STEP 9: Fail the job if destroy failed
       - name: Fail if destroy failed
         if: steps.destroy.outcome == 'failure'
         run: exit 1
