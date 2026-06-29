@@ -78,7 +78,7 @@ jobs:
         id: outputs
         working-directory: environments/prod
         run: |
-          echo "instance_ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
+          echo "instance_ip=$(terraform output -raw public_ip)" >> $GITHUB_OUTPUT
           echo "domain=$(terraform output -raw domain_name)" >> $GITHUB_OUTPUT
       
       # STEP 8: Create a summary that shows up in the GitHub Actions UI
