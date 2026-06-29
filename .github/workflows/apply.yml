@@ -80,8 +80,8 @@ jobs:
         env:
           TF_LOG: off
         run: |
-          instance_ip=$(terraform output -raw public_ip)
-          domain=$(terraform output -raw domain_name)
+          instance_ip=$(terraform output -raw public_ip 2>/dev/null)
+          domain=$(terraform output -raw domain_name 2>/dev/null)
           echo "instance_ip=${instance_ip}" >> $GITHUB_OUTPUT
           echo "domain=${domain}" >> $GITHUB_OUTPUT
       
