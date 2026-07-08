@@ -65,6 +65,17 @@ resource "aws_security_group_rule" "grafana" {
   description       = "Grafana"
 }
 
+# Inbound: Micro-service app frontend (port 3001)
+resource "aws_security_group_rule" "microapp_frontend" {
+  type              = "ingress"
+  from_port         = 3001
+  to_port           = 3001
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.web.id
+  description       = "Micro-service app frontend"
+}
+
 # Outbound: Allow all (for package updates, DNS, etc.)
 resource "aws_security_group_rule" "egress_all" {
   type              = "egress"
