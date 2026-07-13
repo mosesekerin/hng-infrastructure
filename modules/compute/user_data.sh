@@ -303,6 +303,10 @@ http {
     limit_req_zone \$binary_remote_addr zone=general:10m rate=30r/s;
     limit_req_zone \$binary_remote_addr zone=api:10m rate=10r/s;
 
+    upstream microapp_frontend {
+        server 127.0.0.1:3001;  # Frontend React/Vue app
+    }
+
     # HTTP to HTTPS redirect
     server {
         listen 80;
@@ -340,11 +344,21 @@ http {
         add_header Referrer-Policy "no-referrer-when-downgrade" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
-        location = / {
-            limit_req zone=general burst=20 nodelay;
-            default_type text/html;
-            return 200 '<h1>$HNG_USERNAME</h1>';
-            access_log /var/log/nginx/root.log structured;
+        #location = / {
+         #   limit_req zone=general burst=20 nodelay;
+         #  default_type text/html;
+         #   return 200 '<h1>$HNG_USERNAME</h1>';
+         #   access_log /var/log/nginx/root.log structured;
+        #}
+
+        # Frontend microapp
+        location / {
+            proxy_pass http://microapp_frontend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            access_log /var/log/nginx/microapp_frontend.log structured;
         }
 
         location = /api {
@@ -369,10 +383,10 @@ http {
             return 404;
         }
 
-        location / {
-            return 404;
-            access_log /var/log/nginx/404.log structured;
-        }
+        #location / {
+        #    return 404;
+        #    access_log /var/log/nginx/404.log structured;
+        #}
     }
 }
 EOF
