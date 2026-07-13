@@ -22,6 +22,7 @@ resource "aws_instance" "web" {
   key_name      = var.key_name
 
   vpc_security_group_ids = [var.security_group_id]
+  iam_instance_profile   = aws_iam_instance_profile.web.name
 
   # Storage
   root_block_device {
@@ -36,9 +37,12 @@ resource "aws_instance" "web" {
   }
 
   # User data: Initial setup script
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    environment  = var.environment
-    hng_username = var.hng_username
+  user_data_base64 = base64gzip(templatefile("${path.module}/user_data.sh", {
+    environment       = var.environment
+    hng_username      = var.hng_username
+    deploy_public_key = var.deploy_public_key
+    domain_name       = var.domain_name
+    letsencrypt_email = var.letsencrypt_email
   }))
 
   tags = {
@@ -67,3 +71,4 @@ resource "aws_eip" "web" {
     var.internet_gateway_id
   ]
 }
+

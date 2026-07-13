@@ -40,3 +40,20 @@ variable "hng_username" {
   type        = string
   default     = "Your-HNG-Username"
 }
+
+variable "deploy_public_key" {
+  description = "Public key authorized for CI/CD deploys over SSH"
+  type        = string
+}
+
+variable "domain_name" {
+  description = "Domain name"
+  type        = string
+  # Pass via: -var="domain_name=yourdomain.com"
+}
+
+variable "letsencrypt_email" {
+  description = "Email for Let's Encrypt certificate"
+  type        = string
+  # Pass via: -var="letsencrypt_email=your@email.com"
+}
