@@ -21,4 +21,4 @@ public_subnet_cidr = "10.0.1.0/24"
 hng_username         = "Timileyin-Your-SRE-Guy"
 letsencrypt_email    = "mosesekerin@gmail.com"
 ssh_private_key_path = "~/.ssh/hng-infrastructure.pem"
-
+deploy_public_key    = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEvaltXZFUPqDlB+rVVBW1Y4ucAobECHIdisXA5l6V3D timileyin@DESKTOP-6ND31Q2"
