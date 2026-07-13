@@ -11,10 +11,10 @@ terraform {
 
   # Remote state
   backend "s3" {
-    bucket         = "hng-terraform-state-617163942982" # CHANGE THIS
-    key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
+    bucket  = "hng-terraform-state-617163942982" # CHANGE THIS
+    key     = "prod/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
   }
 }
 
@@ -55,8 +55,7 @@ module "security" {
 
 # Compute
 module "compute" {
-  source = "../../modules/compute"
-
+  source              = "../../modules/compute"
   environment         = local.environment
   instance_type       = var.instance_type
   subnet_id           = module.networking.public_subnet_id
@@ -65,6 +64,9 @@ module "compute" {
   root_volume_size    = var.root_volume_size
   internet_gateway_id = module.networking.internet_gateway_id
   hng_username        = var.hng_username
+  deploy_public_key   = var.deploy_public_key
+  domain_name         = var.domain_name
+  letsencrypt_email   = var.letsencrypt_email
 }
 
 # DNS (if you have a Route 53 hosted zone)

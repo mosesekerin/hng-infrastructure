@@ -75,4 +75,9 @@ variable "ssh_private_key_path" {
   type        = string
   default     = "~/.ssh/hng-infrastructure.pem"
 }
+
+variable "deploy_public_key" {
+  description = "Public key authorized for CI/CD deploys over SSH"
+  type        = string
+}
 # test plan
