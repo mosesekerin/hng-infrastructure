@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     GitHub (Source Control)                  │
+│                     GitHub (Source Control)                 │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │  Repository: hng-infrastructure                      │   │
 │  │  - Terraform code (IaC)                              │   │
@@ -15,9 +15,9 @@
              │
              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              GitHub Actions (CI/CD Orchestration)            │
+│              GitHub Actions (CI/CD Orchestration)           │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │  plan.yml       - Validates infrastructure changes  │   │
+│  │  plan.yml       - Validates infrastructure changes   │   │
 │  │  apply.yml      - Deploys infrastructure             │   │
 │  │  destroy.yml    - Tears down infrastructure          │   │
 │  │  OIDC Auth      - Temporary AWS credentials          │   │
@@ -26,44 +26,44 @@
              │
              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 AWS Account (us-east-1)                      │
+│                 AWS Account (us-east-1)                     │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │                    VPC (10.0.0.0/16)                 │   │
-│  │  ┌──────────────────────────────────────────────┐   │   │
-│  │  │        Public Subnet (10.0.1.0/24)          │   │   │
-│  │  │  ┌─────────────────────────────────────┐    │   │   │
-│  │  │  │   EC2 Instance (t3.micro)          │    │   │   │
-│  │  │  │   Ubuntu 22.04 LTS                 │    │   │   │
-│  │  │  │   ┌────────────────────────────┐   │    │   │   │
-│  │  │  │   │  Services                  │   │    │   │   │
-│  │  │  │   ├─ Nginx (443/80)            │   │    │   │   │
-│  │  │  │   ├─ Prometheus (9090)         │   │    │   │   │
-│  │  │  │   ├─ Grafana (3000)            │   │    │   │   │
-│  │  │  │   ├─ Loki (3100)               │   │    │   │   │
-│  │  │  │   ├─ Node Exporter (9100)      │   │    │   │   │
-│  │  │  │   └─ Docker (containers)       │   │    │   │   │
-│  │  │  │      ├─ Frontend (3001)        │   │    │   │   │
-│  │  │  │      ├─ Backend API (8000)     │   │    │   │   │
-│  │  │  │      ├─ Redis (6379)           │   │    │   │   │
-│  │  │  │      └─ Worker                 │   │    │   │   │
-│  │  │  └────────────────────────────────┘   │    │   │   │
-│  │  │                                        │    │   │   │
-│  │  │  Elastic IP: 100.25.222.228          │    │   │   │
-│  │  └─────────────────────────────────────────┘    │   │   │
-│  │                                                  │   │   │
-│  │  Internet Gateway                              │   │   │
-│  │  Route Table                                   │   │   │
-│  │  Security Groups                               │   │   │
+│  │  ┌──────────────────────────────────────────────┐    │   │
+│  │  │        Public Subnet (10.0.1.0/24)           │    │   │
+│  │  │  ┌─────────────────────────────────────┐     │    │   │
+│  │  │  │   EC2 Instance (t3.micro)           │     │    │   │
+│  │  │  │   Ubuntu 22.04 LTS                  │     │    │   │
+│  │  │  │   ┌────────────────────────────┐    │     │    │   │
+│  │  │  │   │  Services                  │    │     │    │   │
+│  │  │  │   ├─ Nginx (443/80)            │    │     │    │   │
+│  │  │  │   ├─ Prometheus (9090)         │    │     │    │   │
+│  │  │  │   ├─ Grafana (3000)            │    │     │    │   │
+│  │  │  │   ├─ Loki (3100)               │    │     │    │   │
+│  │  │  │   ├─ Node Exporter (9100)      │    │     │    │   │
+│  │  │  │   └─ Docker (containers)       │    │     │    │   │
+│  │  │  │      ├─ Frontend (3001)        │    │     │    │   │
+│  │  │  │      ├─ Backend API (8000)     │    │     │    │   │
+│  │  │  │      ├─ Redis (6379)           │    │     │    │   │
+│  │  │  │      └─ Worker                 │    │     │    │   │
+│  │  │  └────────────────────────────────┘    │     │    │   │
+│  │  │                                        │     │    │   │
+│  │  │  Elastic IP: 100.25.222.228            │     │    │   │
+│  │  └─────────────────────────────────────────┘    │    │   │
+│  │                                                 │    │   │
+│  │  Internet Gateway                               │    │   │
+│  │  Route Table                                    │    │   │
+│  │  Security Groups                                │    │   │
 │  └──────────────────────────────────────────────────┘   │
-│                                                          │
+│                                                         │
 │  Route53 Hosted Zone                                    │
-│  - infra.mosesekerin.name.ng (A record → EIP)          │
-│  - www.infra.mosesekerin.name.ng (A record → EIP)      │
-│                                                          │
-│  S3 Bucket: hng-terraform-state-617163942982           │
+│  - infra.mosesekerin.name.ng (A record → EIP)           │
+│  - www.infra.mosesekerin.name.ng (A record → EIP)       │
+│                                                         │
+│  S3 Bucket: hng-terraform-state-617163942982            │
 │  - terraform.tfstate (encrypted)                        │
 │  - terraform.tfstate.backup                             │
-│                                                          │
+│                                                         │
 │  IAM Role: github-actions-terraform                     │
 │  - OIDC trust policy                                    │
 │  - EC2, VPC, Route53, IAM permissions                   │
