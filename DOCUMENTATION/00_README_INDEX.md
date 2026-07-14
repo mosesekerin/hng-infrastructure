@@ -5,8 +5,11 @@
 This is a comprehensive engineering documentation package for the **HNG Infrastructure** project—a production-grade Infrastructure as Code deployment on AWS with complete CI/CD automation, monitoring, logging, and containerized microservices.
 
 **Repository:** https://github.com/mosesekerin/hng-infrastructure
+
 **Live Domain:** https://infra.mosesekerin.name.ng
+
 **Engineer:** Timileyin (@mosesekerin)
+
 **Track:** DevOps (HNG Internship HNGI14)
 
 ---
