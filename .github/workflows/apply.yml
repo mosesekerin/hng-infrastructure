@@ -77,13 +77,18 @@ jobs:
       - name: Get Outputs
         id: outputs
         working-directory: environments/prod
-        env:
-          TF_LOG: off
         run: |
-          instance_ip=$(terraform output -raw public_ip)
-          domain=$(terraform output -raw domain_name)
-          echo "instance_ip=${instance_ip}" >> $GITHUB_OUTPUT
-          echo "domain=${domain}" >> $GITHUB_OUTPUT
+          # Get outputs and store in temp variables
+          instance_ip=$(terraform output -raw public_ip 2>&1 | grep -v '::debug::' | head -1)
+          domain=$(terraform output -raw domain_name 2>&1 | grep -v '::debug::' | head -1)
+    
+          # Write to GitHub output file with proper format
+          echo "instance_ip=$instance_ip" >> $GITHUB_OUTPUT
+          echo "domain=$domain" >> $GITHUB_OUTPUT
+    
+          # Debug: show what was written
+          echo "Output written:"
+          cat $GITHUB_OUTPUT
       
       # STEP 8: Create a summary that shows up in the GitHub Actions UI
       - name: Create Deployment Summary

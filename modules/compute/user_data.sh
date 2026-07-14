@@ -6,7 +6,7 @@ exec > >(tee /var/log/user-data.log)
 exec 2>&1
 
 echo "=== User Data Script Starting ==="
-echo "Environment: $$${environment}"
+echo "Environment: ${environment}"
 echo "Timestamp: $(date)"
 
 # ============================================================
@@ -35,7 +35,7 @@ apt-get install -y \
 # ============================================================
 
 echo "=== Step 2: Installing Docker ==="
-apt-get install -y docker.io docker-compose
+apt-get install -y docker.io docker-compose-v2
 usermod -aG docker ubuntu
 systemctl enable docker
 systemctl start docker
@@ -234,13 +234,12 @@ fi
 
 echo "Obtaining SSL certificate for $DOMAIN..."
 
-# Obtain certificate
+# Obtain certificate for base domain only (not www)
 certbot certonly --nginx \
   --non-interactive \
   --agree-tos \
   --email "$EMAIL" \
-  -d "$DOMAIN" \
-  -d "www.$DOMAIN"
+  -d "$DOMAIN"
 
 echo "Certificate obtained successfully!"
 echo "Certificate path: /etc/letsencrypt/live/$DOMAIN/fullchain.pem"
@@ -259,13 +258,12 @@ cat > /usr/local/bin/update-nginx-ssl.sh << 'NGINX_UPDATE'
 set -e
 
 DOMAIN=$1
+HNG_USERNAME=$2
 
-if [ -z "$DOMAIN" ]; then
-  echo "Usage: update-nginx-ssl.sh <domain>"
+if [ -z "$DOMAIN" ] || [ -z "$HNG_USERNAME" ]; then
+  echo "Usage: update-nginx-ssl.sh <domain> <hng_username>"
   exit 1
 fi
-
-HNG_USERNAME="$$${HNG_USERNAME:-Your-Username}"
 
 # Update Nginx config with SSL
 cat > /etc/nginx/nginx.conf << EOF
@@ -305,11 +303,15 @@ http {
     limit_req_zone \$binary_remote_addr zone=general:10m rate=30r/s;
     limit_req_zone \$binary_remote_addr zone=api:10m rate=10r/s;
 
+    upstream microapp_frontend {
+        server 127.0.0.1:3001;  # Frontend React/Vue app
+    }
+
     # HTTP to HTTPS redirect
     server {
         listen 80;
         listen [::]:80;
-        server_name $DOMAIN www.$DOMAIN;
+        server_name \$DOMAIN;
 
         location /.well-known/acme-challenge/ {
             root /var/www/certbot;
@@ -324,10 +326,10 @@ http {
     server {
         listen 443 ssl http2;
         listen [::]:443 ssl http2;
-        server_name $DOMAIN www.$DOMAIN;
+        server_name \$DOMAIN;
 
-        ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+        ssl_certificate /etc/letsencrypt/live/\$DOMAIN/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/\$DOMAIN/privkey.pem;
 
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256';
@@ -342,11 +344,21 @@ http {
         add_header Referrer-Policy "no-referrer-when-downgrade" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
-        location = / {
-            limit_req zone=general burst=20 nodelay;
-            default_type text/html;
-            return 200 '<h1>$HNG_USERNAME</h1>';
-            access_log /var/log/nginx/root.log structured;
+        #location = / {
+         #   limit_req zone=general burst=20 nodelay;
+         #  default_type text/html;
+         #   return 200 '<h1>$HNG_USERNAME</h1>';
+         #   access_log /var/log/nginx/root.log structured;
+        #}
+
+        # Frontend microapp
+        location / {
+            proxy_pass http://microapp_frontend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            access_log /var/log/nginx/microapp_frontend.log structured;
         }
 
         location = /api {
@@ -371,10 +383,10 @@ http {
             return 404;
         }
 
-        location / {
-            return 404;
-            access_log /var/log/nginx/404.log structured;
-        }
+        #location / {
+        #    return 404;
+        #    access_log /var/log/nginx/404.log structured;
+        #}
     }
 }
 EOF
@@ -391,11 +403,29 @@ NGINX_UPDATE
 chmod +x /usr/local/bin/update-nginx-ssl.sh
 
 # ============================================================
-# SECTION 12: DOWNLOAD AND EXECUTE MONITORING & LOGGING SETUP
+# SECTION 12: Obtain SSL Certificate and Configure Nginx
 # ============================================================
 
 echo ""
-echo "=== Step 12: Setting up monitoring and logging stack ==="
+echo "=== Step 12: Obtaining SSL certificate and configuring Nginx ==="
+
+# Wait for Nginx to be fully ready
+sleep 5
+
+# Get SSL certificate
+/usr/local/bin/setup-ssl.sh "${domain_name}" "${letsencrypt_email}"
+
+# Update Nginx with SSL configuration
+/usr/local/bin/update-nginx-ssl.sh "${domain_name}" "${hng_username}"
+
+echo "✅ SSL certificate obtained and Nginx configured"
+
+# ============================================================
+# SECTION 13: DOWNLOAD AND EXECUTE MONITORING & LOGGING SETUP
+# ============================================================
+
+echo ""
+echo "=== Step 13: Setting up monitoring and logging stack ==="
 
 # Download and run monitoring setup
 GITHUB_MONITORING="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/main/scripts/monitoring-setup.sh"
@@ -425,3 +455,44 @@ fi
 
 echo "   Check progress: tail -f /var/log/monitoring-setup.log"
 echo "   Check progress: tail -f /var/log/loki-setup.log"
+
+# ============================================================
+# SECTION 14: Micro-service App Bootstrap
+# ============================================================
+
+echo "=== Step 14: Bootstrapping micro-service app ==="
+
+# 14a. Authorize the CI/CD deploy key for SSH as ubuntu
+mkdir -p /home/ubuntu/.ssh
+echo "${deploy_public_key}" >> /home/ubuntu/.ssh/authorized_keys
+chmod 700 /home/ubuntu/.ssh
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+
+# 14b. Clone the app repo to the exact path the pipeline expects
+APP_DIR=/home/ubuntu/micro-service-app/job-queue-microservices
+mkdir -p /home/ubuntu/micro-service-app
+git clone https://github.com/mosesekerin/job-queue-microservices.git "$${APP_DIR}"
+
+# 14c. Fetch the secret via the instance's IAM role; write .env
+REDIS_PASSWORD=$(aws ssm get-parameter \
+  --name /microapp/${environment}/redis_password \
+  --with-decryption \
+  --region us-east-1 \
+  --query Parameter.Value \
+  --output text)
+
+cat > "$${APP_DIR}/.env" << EOF
+REDIS_PASSWORD=$${REDIS_PASSWORD}
+FRONTEND_PORT=3001
+EOF
+chmod 600 "$${APP_DIR}/.env"
+
+# 14d. Ownership to ubuntu, so the pipeline's git pull works over SSH
+chown -R ubuntu:ubuntu /home/ubuntu/micro-service-app
+
+# 14e. First launch — creates the world the deploy script will later evolve
+cd "$${APP_DIR}"
+docker compose up -d --build
+
+echo "Micro-service app bootstrapped"
