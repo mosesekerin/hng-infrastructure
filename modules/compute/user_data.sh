@@ -409,16 +409,34 @@ chmod +x /usr/local/bin/update-nginx-ssl.sh
 echo ""
 echo "=== Step 12: Obtaining SSL certificate and configuring Nginx ==="
 
-# Wait for Nginx to be fully ready
-sleep 5
+# Wait for DNS to propagate and Nginx to be ready
+echo "Waiting for DNS propagation and Nginx to be ready..."
+sleep 30  # Give DNS time to propagate
 
-# Get SSL certificate
-/usr/local/bin/setup-ssl.sh "${domain_name}" "${letsencrypt_email}"
-
-# Update Nginx with SSL configuration
+# Update Nginx first (without SSL)
 /usr/local/bin/update-nginx-ssl.sh "${domain_name}" "${hng_username}"
 
-echo "✅ SSL certificate obtained and Nginx configured"
+# Obtain SSL certificate with retries
+max_retries=3
+retry_count=0
+while [ $retry_count -lt $max_retries ]; do
+    if /usr/local/bin/setup-ssl.sh "${domain_name}" "${letsencrypt_email}"; then
+        echo "✅ SSL certificate obtained successfully"
+        break
+    else
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            echo "⚠️  SSL certificate attempt $retry_count failed, retrying in 30s..."
+            sleep 30
+        else
+            echo "❌ Failed to obtain SSL certificate after $max_retries attempts"
+            echo "You may need to run manually: /usr/local/bin/setup-ssl.sh ${domain_name} ${letsencrypt_email}"
+        fi
+    fi
+done
+
+# Reload Nginx to apply any SSL updates
+systemctl reload nginx
 
 # ============================================================
 # SECTION 13: DOWNLOAD AND EXECUTE MONITORING & LOGGING SETUP
