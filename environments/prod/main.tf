@@ -71,13 +71,15 @@ module "compute" {
 
 # DNS (if you have a Route 53 hosted zone)
 module "dns" {
-  count  = var.enable_dns ? 1 : 0
+  count  = var.enable_route53_dns ? 1 : 0
   source = "../../modules/dns"
 
-  domain_name       = var.domain_name
-  parent_domain     = var.parent_domain
-  elastic_ip        = module.compute.public_ip
-  create_www_record = true
+  create_dns         = var.enable_route53_dns # Same flag
+  domain_name        = var.domain_name
+  parent_domain      = var.parent_domain
+  elastic_ip         = module.compute.public_ip
+  instance_public_ip = module.compute.public_ip
+  create_www_record  = true
 }
 
 # Monitoring Stack (Phase 4)

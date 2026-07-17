@@ -4,6 +4,16 @@ output "zone_id" {
 }
 
 output "a_record" {
-  value       = aws_route53_record.main.fqdn
+  value       = var.create_dns ? aws_route53_record.infra[0].fqdn : ""
   description = "A record FQDN"
+}
+
+output "infra_fqdn" {
+  description = "FQDN of the infra subdomain"
+  value       = var.create_dns ? aws_route53_record.infra[0].fqdn : ""
+}
+
+output "infra_ip" {
+  description = "IP address that infra domain resolves to"
+  value       = var.create_dns ? tolist(aws_route53_record.infra[0].records)[0] : ""
 }

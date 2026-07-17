@@ -19,4 +19,15 @@ variable "create_www_record" {
   default     = true
 }
 
+variable "instance_public_ip" {
+  description = "Public IP of the instance to point domain to"
+  type        = string
+  default     = ""
+}
+
+variable "create_dns" {
+  description = "Whether to create DNS records for infra subdomain"
+  type        = bool
+  default     = true
+}
 

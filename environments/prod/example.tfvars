@@ -1,11 +1,11 @@
 # Production environment variables
-aws_region       = "us-east-1"
-instance_type    = "t3.micro"
-root_volume_size = 20
-key_name         = "hng-infrastructure"
-domain_name      = "infra.mosesekerin.name.ng"
-parent_domain    = "mosesekerin.name.ng"
-enable_dns       = true
+aws_region         = "us-east-1"
+instance_type      = "t3.micro"
+root_volume_size   = 20
+key_name           = "hng-infrastructure"
+domain_name        = "infra.mosesekerin.name.ng"
+parent_domain      = "mosesekerin.name.ng"
+enable_route53_dns = true
 
 # IMPORTANT: Change this to YOUR IP
 # Run: curl https://ifconfig.me

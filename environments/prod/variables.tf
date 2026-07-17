@@ -52,10 +52,10 @@ variable "parent_domain" {
   # Pass via: -var="parent_domain=mosesekerin.name.ng"
 }
 
-variable "enable_dns" {
-  description = "Enable Route 53 DNS configuration"
+variable "enable_route53_dns" {
+  description = "Enable Route53 DNS management for infra subdomain"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "hng_username" {
@@ -79,5 +79,11 @@ variable "ssh_private_key_path" {
 variable "deploy_public_key" {
   description = "Public key authorized for CI/CD deploys over SSH"
   type        = string
+}
+
+variable "create_dns_records" {
+  description = "Whether to create Route53 DNS records"
+  type        = bool
+  default     = true
 }
 # test plan

@@ -311,7 +311,7 @@ http {
     server {
         listen 80;
         listen [::]:80;
-        server_name \$DOMAIN;
+        server_name $DOMAIN;
 
         location /.well-known/acme-challenge/ {
             root /var/www/certbot;
@@ -326,10 +326,10 @@ http {
     server {
         listen 443 ssl http2;
         listen [::]:443 ssl http2;
-        server_name \$DOMAIN;
+        server_name $DOMAIN;
 
-        ssl_certificate /etc/letsencrypt/live/\$DOMAIN/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/\$DOMAIN/privkey.pem;
+        ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
 
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256';
@@ -344,16 +344,9 @@ http {
         add_header Referrer-Policy "no-referrer-when-downgrade" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
-        #location = / {
-         #   limit_req zone=general burst=20 nodelay;
-         #  default_type text/html;
-         #   return 200 '<h1>$HNG_USERNAME</h1>';
-         #   access_log /var/log/nginx/root.log structured;
-        #}
-
         # Frontend microapp
         location / {
-            proxy_pass http://microapp_frontend;
+            proxy_pass http://microapp_frontend/;
             proxy_set_header Host \$host;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -382,11 +375,6 @@ http {
             access_log off;
             return 404;
         }
-
-        #location / {
-        #    return 404;
-        #    access_log /var/log/nginx/404.log structured;
-        #}
     }
 }
 EOF
@@ -403,57 +391,28 @@ NGINX_UPDATE
 chmod +x /usr/local/bin/update-nginx-ssl.sh
 
 # ============================================================
-# SECTION 12: Obtain SSL Certificate and Configure Nginx
+# REORDERED CLOUD-INIT: Parallelize Sections 13 & 14 with DNS wait
 # ============================================================
 
-echo ""
-echo "=== Step 12: Obtaining SSL certificate and configuring Nginx ==="
-
-# Wait for DNS to propagate and Nginx to be ready
-echo "Waiting for DNS propagation and Nginx to be ready..."
-sleep 30  # Give DNS time to propagate
-
-# Update Nginx first (without SSL)
-/usr/local/bin/update-nginx-ssl.sh "${domain_name}" "${hng_username}"
-
-# Obtain SSL certificate with retries
-max_retries=3
-retry_count=0
-while [ $retry_count -lt $max_retries ]; do
-    if /usr/local/bin/setup-ssl.sh "${domain_name}" "${letsencrypt_email}"; then
-        echo "✅ SSL certificate obtained successfully"
-        break
-    else
-        retry_count=$((retry_count + 1))
-        if [ $retry_count -lt $max_retries ]; then
-            echo "⚠️  SSL certificate attempt $retry_count failed, retrying in 30s..."
-            sleep 30
-        else
-            echo "❌ Failed to obtain SSL certificate after $max_retries attempts"
-            echo "You may need to run manually: /usr/local/bin/setup-ssl.sh ${domain_name} ${letsencrypt_email}"
-        fi
-    fi
-done
-
-# Reload Nginx to apply any SSL updates
-systemctl reload nginx
+# Sections 1-11: System setup (run these first, synchronously)
+# [Keep all Sections 1-11 as-is]
 
 # ============================================================
 # SECTION 13: DOWNLOAD AND EXECUTE MONITORING & LOGGING SETUP
+# (Background: starts immediately, doesn't block boot)
 # ============================================================
 
 echo ""
-echo "=== Step 13: Setting up monitoring and logging stack ==="
+echo "=== Step 13: Setting up monitoring and logging stack (background) ==="
 
 # Download and run monitoring setup
 GITHUB_MONITORING="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/main/scripts/monitoring-setup.sh"
 if curl -fsSL "$GITHUB_MONITORING" -o /tmp/monitoring-setup.sh 2>/dev/null; then
   chmod +x /tmp/monitoring-setup.sh
-  mkdir -p /var/log
-  touch /var/log/monitoring-setup.log
-  chmod 666 /var/log/monitoring-setup.log
-  nohup bash /tmp/monitoring-setup.sh >> /var/log/monitoring-setup.log 2>&1 &
-  echo "✅ Monitoring stack setup started"
+  nohup bash /tmp/monitoring-setup.sh > /tmp/monitoring-setup.log 2>&1 &
+  MONITORING_PID=$!
+  echo "✅ Monitoring stack setup started (PID: $MONITORING_PID)"
+  echo "   Check progress: tail -f /tmp/monitoring-setup.log"
 else
   echo "⚠️  Could not download monitoring setup script"
 fi
@@ -462,23 +421,21 @@ fi
 GITHUB_LOKI="https://raw.githubusercontent.com/mosesekerin/hng-infrastructure/main/scripts/loki-setup.sh"
 if curl -fsSL "$GITHUB_LOKI" -o /tmp/loki-setup.sh 2>/dev/null; then
   chmod +x /tmp/loki-setup.sh
-  mkdir -p /var/log
-  touch /var/log/loki-setup.log
-  chmod 666 /var/log/loki-setup.log
-  nohup bash /tmp/loki-setup.sh >> /var/log/loki-setup.log 2>&1 &
-  echo "✅ Loki & Promtail setup started"
+  nohup bash /tmp/loki-setup.sh > /tmp/loki-setup.log 2>&1 &
+  LOKI_PID=$!
+  echo "✅ Loki & Promtail setup started (PID: $LOKI_PID)"
+  echo "   Check progress: tail -f /tmp/loki-setup.log"
 else
   echo "⚠️  Could not download loki setup script"
 fi
 
-echo "   Check progress: tail -f /var/log/monitoring-setup.log"
-echo "   Check progress: tail -f /var/log/loki-setup.log"
-
 # ============================================================
 # SECTION 14: Micro-service App Bootstrap
+# (Background: starts immediately, doesn't block boot)
 # ============================================================
 
-echo "=== Step 14: Bootstrapping micro-service app ==="
+echo ""
+echo "=== Step 14: Bootstrapping micro-service app (background) ==="
 
 # 14a. Authorize the CI/CD deploy key for SSH as ubuntu
 mkdir -p /home/ubuntu/.ssh
@@ -486,11 +443,13 @@ echo "${deploy_public_key}" >> /home/ubuntu/.ssh/authorized_keys
 chmod 700 /home/ubuntu/.ssh
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+echo "✅ CI/CD deploy key authorized"
 
 # 14b. Clone the app repo to the exact path the pipeline expects
 APP_DIR=/home/ubuntu/micro-service-app/job-queue-microservices
 mkdir -p /home/ubuntu/micro-service-app
 git clone https://github.com/mosesekerin/job-queue-microservices.git "$${APP_DIR}"
+echo "✅ Microservice repo cloned"
 
 # 14c. Fetch the secret via the instance's IAM role; write .env
 REDIS_PASSWORD=$(aws ssm get-parameter \
@@ -505,12 +464,214 @@ REDIS_PASSWORD=$${REDIS_PASSWORD}
 FRONTEND_PORT=3001
 EOF
 chmod 600 "$${APP_DIR}/.env"
+echo "✅ .env file created with secrets"
 
 # 14d. Ownership to ubuntu, so the pipeline's git pull works over SSH
 chown -R ubuntu:ubuntu /home/ubuntu/micro-service-app
 
-# 14e. First launch — creates the world the deploy script will later evolve
-cd "$${APP_DIR}"
-docker compose up -d --build
+# 14e. Start Docker Compose in background (doesn't block boot)
+nohup bash -c "cd '$${APP_DIR}' && docker compose up -d --build" > /tmp/docker-bootstrap.log 2>&1 &
+DOCKER_PID=$!
+echo "✅ Docker Compose started in background (PID: $DOCKER_PID)"
+echo "   Check progress: tail -f /tmp/docker-bootstrap.log"
 
-echo "Micro-service app bootstrapped"
+# ============================================================
+# SECTION 12: Obtain SSL Certificate and Configure Nginx
+# (Synchronous: waits for DNS, but Sections 13 & 14 run in parallel)
+# ============================================================
+
+echo ""
+echo "=== Step 12: Obtaining SSL certificate and configuring Nginx ==="
+echo "⚠️  NOTE: Sections 13 & 14 are running in background. Waiting for DNS..."
+
+# Step 1: Configure Nginx WITHOUT SSL (HTTP only for ACME challenge)
+echo "Step 12.1: Configuring Nginx for ACME challenge (HTTP only)..."
+
+cat > /etc/nginx/nginx.conf << 'NGINX_HTTP'
+user www-data;
+worker_processes auto;
+worker_rlimit_nofile 65535;
+pid /run/nginx.pid;
+
+events {
+    worker_connections 4096;
+    use epoll;
+}
+
+http {
+    log_format structured '$remote_addr - $remote_user [$time_local] '
+                         '"$request" $status $body_bytes_sent '
+                         '"$http_referer" "$http_user_agent" '
+                         'request_time=$request_time upstreamtime=$upstream_response_time';
+
+    access_log /var/log/nginx/access.log structured;
+    error_log /var/log/nginx/error.log warn;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1000;
+    gzip_types text/plain text/css application/json text/javascript;
+
+    limit_req_zone \$binary_remote_addr zone=general:10m rate=30r/s;
+    limit_req_zone \$binary_remote_addr zone=api:10m rate=10r/s;
+
+    # HTTP server for ACME challenge
+    server {
+        listen 80;
+        listen [::]:80;
+        server_name _;
+
+        # ACME challenge path for Let's Encrypt
+        location /.well-known/acme-challenge/ {
+            root /var/www/certbot;
+        }
+
+        # All other requests → 404 for now
+        location / {
+            return 404;
+        }
+    }
+}
+NGINX_HTTP
+
+if nginx -t; then
+    systemctl reload nginx
+    echo "✅ Nginx configured for HTTP (ACME challenge)"
+else
+    echo "❌ Nginx HTTP config test failed"
+    exit 1
+fi
+
+# Step 2: Verify DNS propagation BEFORE attempting SSL (up to 30 minutes)
+echo "Step 12.2: Verifying DNS propagation (Route53)..."
+
+INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+echo "Instance public IP: $INSTANCE_IP"
+echo "Domain: ${domain_name}"
+
+DNS_MAX_RETRIES=360  # Up to 30 minutes (accounts for global DNS propagation)
+DNS_RETRY_COUNT=0
+DNS_VERIFIED=false
+
+while [ $DNS_RETRY_COUNT -lt $DNS_MAX_RETRIES ]; do
+    RESOLVED_IP=$(dig +short ${domain_name} @8.8.8.8 | tail -1)
+
+    if [ "$RESOLVED_IP" = "$INSTANCE_IP" ]; then
+        echo "✅ DNS verified! ${domain_name} → $RESOLVED_IP"
+        DNS_VERIFIED=true
+        break
+    else
+        DNS_RETRY_COUNT=$((DNS_RETRY_COUNT + 1))
+        if [ $((DNS_RETRY_COUNT % 12)) -eq 0 ]; then
+            echo "⏳ DNS not yet propagated (attempt $DNS_RETRY_COUNT/$DNS_MAX_RETRIES)"
+            echo "   Expected: $INSTANCE_IP, Got: $RESOLVED_IP"
+        fi
+        sleep 5
+    fi
+done
+
+if [ "$DNS_VERIFIED" = "false" ]; then
+    echo "❌ DNS failed to propagate after 30 minutes"
+    echo "   Expected: $INSTANCE_IP"
+    echo "   Got: $RESOLVED_IP"
+    exit 1
+fi
+
+# Step 3: Obtain SSL certificate with retries
+echo "Step 12.3: Obtaining SSL certificate..."
+
+CERT_MAX_RETRIES=5
+CERT_RETRY_COUNT=0
+CERT_OBTAINED=false
+
+while [ $CERT_RETRY_COUNT -lt $CERT_MAX_RETRIES ]; do
+    if /usr/local/bin/setup-ssl.sh "${domain_name}" "${letsencrypt_email}"; then
+        echo "✅ SSL certificate obtained successfully"
+        CERT_OBTAINED=true
+        break
+    else
+        CERT_RETRY_COUNT=$((CERT_RETRY_COUNT + 1))
+        if [ $CERT_RETRY_COUNT -lt $CERT_MAX_RETRIES ]; then
+            WAIT_TIME=$((20 * CERT_RETRY_COUNT))
+            echo "⚠️  SSL certificate attempt $CERT_RETRY_COUNT/$CERT_MAX_RETRIES failed"
+            echo "   Retrying in $${WAIT_TIME}s..."
+            sleep $${WAIT_TIME}
+        fi
+    fi
+done
+
+if [ "$CERT_OBTAINED" = "false" ]; then
+    echo "❌ Failed to obtain SSL certificate after $CERT_MAX_RETRIES attempts"
+    echo "   Manual recovery:"
+    echo "   sudo /usr/local/bin/setup-ssl.sh ${domain_name} ${letsencrypt_email}"
+    echo "   (HTTP server is still running at http://${domain_name}/)"
+    # Don't exit - let the server continue with HTTP
+fi
+
+# Step 4: Update Nginx with SSL (if certificate was obtained)
+if [ "$CERT_OBTAINED" = "true" ]; then
+    echo "Step 12.4: Configuring Nginx with SSL..."
+    if /usr/local/bin/update-nginx-ssl.sh "${domain_name}" "${hng_username}"; then
+        echo "✅ Nginx updated with SSL configuration"
+        # RESTART (not reload) to fully apply SSL config
+        sudo systemctl restart nginx
+        echo "✅ Nginx restarted with SSL active"
+    else
+        echo "❌ Failed to configure Nginx with SSL"
+    fi
+fi
+
+echo ""
+echo "=== Step 12 Complete ==="
+if [ "$CERT_OBTAINED" = "true" ]; then
+    echo "✅ HTTPS available at: https://${domain_name}/"
+else
+    echo "⚠️  HTTP available at: http://${domain_name}/"
+    echo "   HTTPS setup will be available after manual SSL retry"
+fi
+
+# ============================================================
+# FINAL: Wait for background jobs to complete
+# ============================================================
+
+echo ""
+echo "=== Waiting for background jobs (Sections 13 & 14) to complete ==="
+
+if [ ! -z "$MONITORING_PID" ]; then
+    wait $MONITORING_PID
+    echo "✅ Monitoring setup completed"
+fi
+
+if [ ! -z "$LOKI_PID" ]; then
+    wait $LOKI_PID
+    echo "✅ Loki & Promtail setup completed"
+fi
+
+if [ ! -z "$DOCKER_PID" ]; then
+    wait $DOCKER_PID
+    echo "✅ Docker Compose bootstrap completed"
+fi
+
+echo ""
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║   Cloud-Init Complete! All sections finished.              ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
+echo "Application available at:"
+echo "  HTTPS:  https://${domain_name}/"
+echo "  HTTP:   http://${domain_name}/"
+echo "  API:    https://${domain_name}/api"
+echo ""
+echo "Monitoring dashboards:"
+echo "  Prometheus: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):9090"
+echo "  Grafana:    http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):3000"
+echo ""

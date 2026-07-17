@@ -8,6 +8,17 @@ A complete, production-ready infrastructure-as-code deployment demonstrating mod
 
 ---
 
+## Architecture At a Glance
+
+<p align="center">
+  <img src="asset/Cloud_Infrastructure_Platform.png" alt="GitHub Banner" width="100%">
+</p>
+
+For detailed architecture diagrams and flow, see
+[DOCUMENTATION/03_ARCHITECTURE.md](DOCUMENTATION/03_ARCHITECTURE.md)
+
+---
+
 ## What's Running
 
 - **VPC + Networking** - AWS infrastructure on us-east-1
@@ -52,27 +63,6 @@ terraform apply -var-file=example.tfvars
 
 ---
 
-## Architecture At a Glance
-
-```
-User Browser (HTTPS)
-    ↓
-Nginx Reverse Proxy (443)
-    ↓
-Frontend Container (Docker)
-    ├→ Backend API (internal only)
-    └→ Redis Cache (internal only)
-
-Monitoring: Prometheus → Grafana Dashboards
-Logging: Application/System → Promtail → Loki
-Deployment: GitHub → GitHub Actions → Terraform → AWS
-```
-
-For detailed architecture diagrams and flow, see 
-[DOCUMENTATION/03_ARCHITECTURE.md](DOCUMENTATION/03_ARCHITECTURE.md)
-
----
-
 ## Project Phases
 
 The infrastructure was built incrementally across 6 phases:
@@ -86,21 +76,21 @@ The infrastructure was built incrementally across 6 phases:
 | **6** | CI/CD pipeline (GitHub Actions, OIDC) + Application | ✅ Complete |
 | **7** | Reliability engineering (SLOs, runbooks) | 🔄 Planned |
 
-Complete timeline with milestones: 
+Complete timeline with milestones:
 [DOCUMENTATION/02_PROJECT_TIMELINE.md](DOCUMENTATION/02_PROJECT_TIMELINE.md)
 
 ---
 
 ## Technology Stack
 
-**Infrastructure:** Terraform, AWS (VPC, EC2, Route53, S3, IAM)  
-**Deployment:** GitHub Actions, OIDC authentication  
-**Application:** Docker, Docker Compose  
-**Web:** Nginx, Let's Encrypt, TLS 1.2+  
-**Monitoring:** Prometheus, Grafana, Node Exporter  
-**Logging:** Loki, Promtail  
-**Security:** Encryption at rest/transit, SSH hardening, OIDC, KMS  
-**OS:** Ubuntu 22.04 LTS  
+**Infrastructure:** Terraform, AWS (VPC, EC2, Route53, S3, IAM)
+**Deployment:** GitHub Actions, OIDC authentication
+**Application:** Docker, Docker Compose
+**Web:** Nginx, Let's Encrypt, TLS 1.2+
+**Monitoring:** Prometheus, Grafana, Node Exporter
+**Logging:** Loki, Promtail
+**Security:** Encryption at rest/transit, SSH hardening, OIDC, KMS
+**OS:** Ubuntu 22.04 LTS
 
 Why each technology was chosen and alternatives considered:
 [DOCUMENTATION/04_TECHNOLOGY_STACK.md](DOCUMENTATION/04_TECHNOLOGY_STACK.md)
@@ -109,7 +99,7 @@ Why each technology was chosen and alternatives considered:
 
 ## Engineering Decisions
 
-This project represents **18 major architectural and implementation decisions**, 
+This project represents **18 major architectural and implementation decisions**,
 each with documented reasoning, alternatives considered, and trade-offs.
 
 Examples:
@@ -126,7 +116,7 @@ Each decision documented with full reasoning:
 
 ## Problem-Solving
 
-Built into operations were **5 major complex problems** that were debugged 
+Built into operations were **5 major complex problems** that were debugged
 and solved systematically:
 
 1. **Terraform plan hanging** → Missing variables in CI/CD config
@@ -144,12 +134,12 @@ Each problem includes symptoms, root cause analysis, debugging process, and less
 
 Security is built-in, not bolted-on:
 
-✅ **Zero stored credentials** - OIDC temporary tokens only  
-✅ **Encryption everywhere** - At rest (EBS, S3), in transit (HTTPS)  
-✅ **SSH hardening** - Key-based only, CIDR restricted  
-✅ **Network security** - Security groups, restricted ingress  
-✅ **Secret management** - AWS Parameter Store with KMS  
-✅ **Audit trail** - CloudTrail, GitHub Actions logs, git history  
+✅ **Zero stored credentials** - OIDC temporary tokens only
+✅ **Encryption everywhere** - At rest (EBS, S3), in transit (HTTPS)
+✅ **SSH hardening** - Key-based only, CIDR restricted
+✅ **Network security** - Security groups, restricted ingress
+✅ **Secret management** - AWS Parameter Store with KMS
+✅ **Audit trail** - CloudTrail, GitHub Actions logs, git history
 
 Complete security analysis with threat model and recommendations:
 [DOCUMENTATION/09_SECURITY.md](DOCUMENTATION/09_SECURITY.md)
@@ -160,7 +150,7 @@ Complete security analysis with threat model and recommendations:
 
 ### How to Operate
 
-Common operations, troubleshooting procedures, maintenance tasks, and 
+Common operations, troubleshooting procedures, maintenance tasks, and
 emergency procedures documented:
 [DOCUMENTATION/08_OPERATIONAL_GUIDE.md](DOCUMENTATION/08_OPERATIONAL_GUIDE.md)
 
@@ -173,7 +163,7 @@ Access monitoring at:
 
 ### Key Metrics
 
-All infrastructure deployed without manual steps. Real-time metrics available 
+All infrastructure deployed without manual steps. Real-time metrics available
 in Grafana showing:
 - CPU, memory, disk utilization
 - Request latency and throughput
@@ -246,13 +236,13 @@ Full feature list and usage examples:
 
 ## What Makes This Production-Ready
 
-✅ Infrastructure reproducible (destroy and rebuild anytime)  
-✅ Zero manual deployment steps (fully automated)  
-✅ Complete observability (metrics, logs, alerts)  
-✅ Security hardened (encryption, OIDC, least privilege)  
-✅ Disaster recovery (full backup and recovery)  
-✅ Thoroughly documented (11 comprehensive documents)  
-✅ Real-world patterns (not toy project examples)  
+✅ Infrastructure reproducible (destroy and rebuild anytime)
+✅ Zero manual deployment steps (fully automated)
+✅ Complete observability (metrics, logs, alerts)
+✅ Security hardened (encryption, OIDC, least privilege)
+✅ Disaster recovery (full backup and recovery)
+✅ Thoroughly documented (11 comprehensive documents)
+✅ Real-world patterns (not toy project examples)
 
 ---
 
@@ -305,13 +295,13 @@ Complete lessons learned:
 
 ## Deployment Status
 
-✅ Infrastructure: Running (AWS us-east-1)  
-✅ HTTPS: Active with valid certificate  
-✅ Monitoring: Operational (Prometheus + Grafana)  
-✅ Logging: Aggregated (Loki + Promtail)  
-✅ CI/CD: Fully automated (GitHub Actions)  
-✅ Application: Deployed (Docker Compose)  
-✅ Uptime: 24/7 (as long as AWS availability)  
+✅ Infrastructure: Running (AWS us-east-1)
+✅ HTTPS: Active with valid certificate
+✅ Monitoring: Operational (Prometheus + Grafana)
+✅ Logging: Aggregated (Loki + Promtail)
+✅ CI/CD: Fully automated (GitHub Actions)
+✅ Application: Deployed (Docker Compose)
+✅ Uptime: 24/7 (as long as AWS availability)
 
 ---
 

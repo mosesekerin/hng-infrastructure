@@ -29,7 +29,7 @@ output "security_group_id" {
 }
 
 output "domain_name" {
-  value       = var.enable_dns ? var.domain_name : "Not configured"
+  value       = var.enable_route53_dns ? var.domain_name : "Not configured"
   description = "Domain name"
 }
 
