@@ -83,14 +83,14 @@ Complete timeline with milestones:
 
 ## Technology Stack
 
-**Infrastructure:** Terraform, AWS (VPC, EC2, Route53, S3, IAM)
-**Deployment:** GitHub Actions, OIDC authentication
-**Application:** Docker, Docker Compose
-**Web:** Nginx, Let's Encrypt, TLS 1.2+
-**Monitoring:** Prometheus, Grafana, Node Exporter
-**Logging:** Loki, Promtail
-**Security:** Encryption at rest/transit, SSH hardening, OIDC, KMS
-**OS:** Ubuntu 22.04 LTS
+- **Infrastructure:** Terraform, AWS (VPC, EC2, Route53, S3, IAM).
+- **Deployment:** GitHub Actions, OIDC authentication.
+- **Application:** Docker, Docker Compose.
+- **Web:** Nginx, Let's Encrypt, TLS 1.2+.
+- **Monitoring:** Prometheus, Grafana, Node Exporter.
+- **Logging:** Loki, Promtail.
+- **Security:** Encryption at rest/transit, SSH hardening, OIDC, KMS.
+- **OS:** Ubuntu 22.04 LTS.
 
 Why each technology was chosen and alternatives considered:
 [DOCUMENTATION/04_TECHNOLOGY_STACK.md](DOCUMENTATION/04_TECHNOLOGY_STACK.md)
@@ -134,12 +134,12 @@ Each problem includes symptoms, root cause analysis, debugging process, and less
 
 Security is built-in, not bolted-on:
 
-✅ **Zero stored credentials** - OIDC temporary tokens only
-✅ **Encryption everywhere** - At rest (EBS, S3), in transit (HTTPS)
-✅ **SSH hardening** - Key-based only, CIDR restricted
-✅ **Network security** - Security groups, restricted ingress
-✅ **Secret management** - AWS Parameter Store with KMS
-✅ **Audit trail** - CloudTrail, GitHub Actions logs, git history
+- ✅ **Zero stored credentials** - OIDC temporary tokens only.
+- ✅ **Encryption everywhere** - At rest (EBS, S3), in transit (HTTPS).
+- ✅ **SSH hardening** - Key-based only, CIDR restricted.
+- ✅ **Network security** - Security groups, restricted ingress.
+- ✅ **Secret management** - AWS Parameter Store with KMS.
+- ✅ **Audit trail** - CloudTrail, GitHub Actions logs, git history.
 
 Complete security analysis with threat model and recommendations:
 [DOCUMENTATION/09_SECURITY.md](DOCUMENTATION/09_SECURITY.md)
@@ -236,13 +236,13 @@ Full feature list and usage examples:
 
 ## What Makes This Production-Ready
 
-✅ Infrastructure reproducible (destroy and rebuild anytime)
-✅ Zero manual deployment steps (fully automated)
-✅ Complete observability (metrics, logs, alerts)
-✅ Security hardened (encryption, OIDC, least privilege)
-✅ Disaster recovery (full backup and recovery)
-✅ Thoroughly documented (11 comprehensive documents)
-✅ Real-world patterns (not toy project examples)
+- ✅ Infrastructure reproducible (destroy and rebuild anytime)
+- ✅ Zero manual deployment steps (fully automated)
+- ✅ Complete observability (metrics, logs, alerts)
+- ✅ Security hardened (encryption, OIDC, least privilege)
+- ✅ Disaster recovery (full backup and recovery)
+- ✅ Thoroughly documented (11 comprehensive documents)
+- ✅ Real-world patterns (not toy project examples)
 
 ---
 
@@ -295,13 +295,13 @@ Complete lessons learned:
 
 ## Deployment Status
 
-✅ Infrastructure: Running (AWS us-east-1)
-✅ HTTPS: Active with valid certificate
-✅ Monitoring: Operational (Prometheus + Grafana)
-✅ Logging: Aggregated (Loki + Promtail)
-✅ CI/CD: Fully automated (GitHub Actions)
-✅ Application: Deployed (Docker Compose)
-✅ Uptime: 24/7 (as long as AWS availability)
+- ✅ Infrastructure: Running (AWS us-east-1)
+- ✅ HTTPS: Active with valid certificate
+- ✅ Monitoring: Operational (Prometheus + Grafana)
+- ✅ Logging: Aggregated (Loki + Promtail)
+- ✅ CI/CD: Fully automated (GitHub Actions)
+- ✅ Application: Deployed (Docker Compose)
+- ✅ Uptime: 24/7 (as long as AWS availability)
 
 ---
 
